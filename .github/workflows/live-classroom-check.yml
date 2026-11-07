@@ -1,0 +1,27 @@
+name: Live classroom check
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/live-classroom-check.yml
+      - demo/quiz/live-check.mjs
+
+permissions:
+  contents: read
+
+jobs:
+  classroom:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check a synthetic question and aggregate report with OpenAI
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
+          OPENAI_QUIZ_MODEL: ${{ vars.OPENAI_QUIZ_MODEL || 'gpt-6-luna' }}
+        run: node demo/quiz/live-check.mjs
