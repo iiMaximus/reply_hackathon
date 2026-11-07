@@ -80,7 +80,7 @@ function hostView() {
     <div class="stack"><section class="card"><div class="row"><img class="qr" src="/qr.png" alt="Scan to join the classroom"><div><p class="eyebrow">Join from a phone</p><p class="mono">${esc(state.room)}</p><a class="joinurl" href="${esc(state.join)}" target="_blank" rel="noopener">Student link ↗</a><br><a class="joinurl" href="/board?room=${esc(state.room)}" target="_blank" rel="noopener">Open projector view ↗</a></div></div></section>
     <section class="card"><p class="eyebrow">Before the exercise</p><h2>What to watch for</h2>
     ${prediction ? `<p class="small">${prediction.mode === "live" ? "AI suggestions" : "Prepared rehearsal examples"} · hypotheses only</p>${prediction.items.map((i) => `<div class="predict"><b>${esc(i.mistake)}</b><p>${esc(i.signal)}</p><p class="small">Ask “${esc(i.question)}”</p></div>`).join("")}` : '<p class="small">Preview possible mistakes and a question to ask if one shows up.</p><button data-action="forecast">Suggest likely mistakes</button>'}</section>
-    <section class="card lavender"><p class="eyebrow">Fresh challenge</p><h2>${esc((state.challenge || state.suggested).title)}</h2><p>${esc((state.challenge || state.suggested).prompt)}</p>${state.challenge ? chip("Open on student screens") : '<button class="primary" data-action="release">Open challenge for everyone →</button>'}</section>
+    <section class="card lavender"><p class="eyebrow">Fresh challenge</p><h2>${esc((state.challenge || state.suggested)?.title || "Waiting for a clear step")}</h2><p>${esc((state.challenge || state.suggested)?.prompt || "")}</p>${state.challenge ? chip("Open on student screens") : '<button class="primary" data-action="release">Open challenge for everyone →</button>'}</section>
     <section class="card"><h2>Standings</h2>${board()}</section>
     <details class="details"><summary>Course reference &amp; rehearsal controls</summary><p><a href="${esc(state.lesson.reference)}" target="_blank" rel="noopener">OpenStax · Maxima and minima ↗</a></p>${state.canLive ? `<button data-action="mode">${state.live ? "Use rehearsal analysis" : "Use live analysis"}</button>` : "Rehearsal analysis is available on this server."}</details></div></div>`;
 }
@@ -222,17 +222,18 @@ function picker(id, text, name, camera = false) {
 function studentComposer() {
   if (entryMode === "sample" && state.simulated) {
     return `<section class="composer"><button class="back-action" data-pilot="choose">← Input options</button>
-      <h2>Try a sample notebook</h2><p>Choose a prepared page to see its scripted reading and private hint.</p>
+      <h2>Try a sample notebook</h2><p>Pick a page and send it as your first attempt. You can revise the step after the hint.</p>
       <div class="notebook-picks">${[
-        ["divide", "Divide by x"],
-        ["factor", "Factor first"],
+        ["divide", "Elena’s page"],
+        ["factor", "Luca’s page"],
+        ["derivative", "Sam’s page"],
       ]
         .map(
           ([id, label]) =>
             `<button data-notebook="${id}" aria-pressed="${selectedNotebook === id}">${label}</button>`,
         )
         .join("")}</div>
-      <img class="work-preview" src="/samples/${selectedNotebook}.png" alt="Sample notebook: ${selectedNotebook === "factor" ? "factor the derivative" : "divide by x"}">
+      <img class="work-preview" src="/samples/${selectedNotebook}.png" alt="Sample notebook: ${esc(selectedNotebook)}">
       <form data-form="notebook"><button class="send-action">Send sample step ↗</button></form></section>`;
   }
   if (entryMode === "choose") {
@@ -275,10 +276,11 @@ function studentComposer() {
 function sentCard() {
   const review = state.attempt;
   return `<section class="composer sent-card" role="status"><span class="sent-check" aria-hidden="true">✓</span>
-    <h2 tabindex="-1">Your step is with your tutor.</h2>
+    <h2 tabindex="-1">${review.handoff ? "Your tutor will take a look." : "Your step is with your tutor."}</h2>
     ${lastSentPhoto || review.notebook ? `<img class="receipt-photo" src="${lastSentPhoto || "/samples/" + esc(review.notebook) + ".png"}" alt="Notebook page you submitted">` : ""}
-    ${review.line ? `<p class="small">${review.notebook ? "Scripted reading of this sample" : "Your step"}</p><blockquote>${esc(review.line)}</blockquote>` : ""}
+    ${review.line ? `<p class="small">${review.notebook ? "Line read from the sample" : "Your step"}</p><blockquote>${esc(review.line)}</blockquote>` : ""}
     <p>${esc(review.hint)}</p>
+    ${review.source ? `<p class="reference-line">Course reference · <a href="${esc(review.source.url)}" target="_blank" rel="noopener">${esc(review.source.title)} ↗</a></p>` : ""}
     ${review.fallback ? '<p class="fallback-note">Live analysis was unavailable. Your tutor still received your step.</p>' : ""}
     <button class="quiet-action" data-pilot="revise">${icon("pen")} Revise my step</button></section>`;
 }
@@ -302,13 +304,26 @@ function attentionGroups() {
     .filter((g) => g?.count);
 }
 
+function traceDetails(ex) {
+  if (!ex.trace?.length) return "";
+  const labels = {
+    lookup_course: "Read course note",
+    recall_practice: "Checked previous hint",
+    record_step: "Recorded step",
+    ask_tutor: "Asked tutor to review",
+    tutor_correction: "Tutor changed the group",
+    unknown_tool: "Blocked an unsupported action",
+  };
+  return `<details class="review-trace" data-preserve="${esc(ex.id)}"><summary>Review history</summary><ol>${ex.trace.map((e) => `<li>${esc(labels[e.action] || e.action)} · ${esc(e.result.replaceAll("_", " "))}</li>`).join("")}</ol>
+    ${ex.source ? `<a href="${esc(ex.source.url)}" target="_blank" rel="noopener">${esc(ex.source.title)} ↗</a>` : ""}</details>`;
+}
 function groupRow(group, open) {
   const entries = group.excerpts
     .map(
       (ex) => `<div class="review-entry">
     ${ex.photo ? `<a class="photo-link" href="${esc(ex.photo)}" target="_blank" rel="noopener"><img src="${esc(ex.photo)}" alt="Open notebook photo at full size"></a>` : ""}
     <div>${ex.example ? "<small>Prepared classmate</small>" : ""}${ex.line ? `<blockquote>${esc(ex.line)}</blockquote>` : ""}
-    <label class="change-group">Group <select data-review="${esc(ex.id)}">${state.groups.map((g) => `<option value="${g.id}" ${g.id === group.id ? "selected" : ""}>${esc(groupLabels[g.id])}</option>`).join("")}</select></label></div></div>`,
+    <label class="change-group">Group <select data-review="${esc(ex.id)}">${state.groups.map((g) => `<option value="${g.id}" ${g.id === group.id ? "selected" : ""}>${esc(groupLabels[g.id])}</option>`).join("")}</select></label>${traceDetails(ex)}</div></div>`,
     )
     .join("");
   return `<article class="pattern pattern-${group.id}"><button class="pattern-heading" data-group="${group.id}" aria-expanded="${open}" aria-controls="details-${group.id}">
@@ -327,7 +342,7 @@ function studentShowcase(exerciseAndAttempt) {
   if (tab === "Study")
     return (
       nav +
-      `<section class="composer"><h2>Try another on paper</h2><p>${esc(state.practice.prompt)}</p><details><summary>Check your working</summary><p>${esc(state.practice.explanation)}</p></details></section>`
+      `<section class="composer"><h2>${esc(state.practice.focus || "Try another on paper")}</h2><p>${esc(state.practice.prompt)}</p><details><summary>Check your working</summary><p>${esc(state.practice.explanation)}</p></details></section>`
     );
   if (tab === "Standings")
     return (
@@ -335,43 +350,57 @@ function studentShowcase(exerciseAndAttempt) {
       `<section class="composer"><h2>Class standings</h2><p>One point for the fresh answer and its reason. Ties share the lead.</p>${board()}
     <form data-form="alias"><label class="compose-field">Your optional alias<input id="alias" maxlength="20" type="text" value="${esc(aliasDraft)}" placeholder="Display name"></label><p class="small">Leave blank to keep your score private.</p><button class="copy-action">Save preference</button></form></section>`
     );
-  return (
-    nav +
-    exerciseAndAttempt +
-    (state.challenge
-      ? `<div class="show-challenge">${challengeView()}</div>`
-      : state.attempt
-        ? '<section class="composer show-wait"><h2>Next up: a fresh challenge</h2><p>It will appear here when your tutor opens it.</p></section>'
-        : "")
-  );
+  return nav + exerciseAndAttempt;
 }
-function tutorControls() {
-  const follow = state.challenge || state.suggested;
+function tutorForecast() {
   const pred = state.prediction;
-  return `<section class="responses"><div class="response-title"><h2>What to watch for</h2></div>
+  return `<section class="responses"><details data-preserve="forecast"><summary>Prepare for the exercise</summary>
     ${
       pred
-        ? `<p class="small">${pred.mode === "live" ? "AI forecast" : "Prepared forecast"} · possibilities before seeing the class’s work</p>
-      ${pred.items.map((i) => `<div class="predict"><strong>${esc(i.mistake)}</strong><p>${esc(i.signal)}</p><p class="small">Ask “${esc(i.question)}”</p></div>`).join("")}`
-        : '<button class="copy-action" data-action="forecast">Preview likely mistakes</button>'
-    }
-    </section>
-    <section class="responses"><div class="response-title"><h2>Fresh challenge</h2></div>
-    ${state.count || state.challenge ? `<strong>${esc(follow.title)}</strong><p>${esc(follow.prompt)}</p><p class="small">Why this question? ${esc(state.recommendationReason)}</p>` : "<p>Collect a step to see the recommended question.</p>"}
-    ${state.challenge ? `<strong>Open on phones</strong><p>${state.audienceCorrect} of ${state.audienceScored} audience answers earned a point.</p>${board()}` : `<button class="send-action" data-action="release" ${state.count ? "" : "disabled"}>Open challenge on phones</button>`}</section>`;
+        ? `<p class="small">${pred.mode === "live" ? "AI forecast" : "Prepared forecast"} · possible mistakes</p>
+    ${pred.items.map((i) => `<div class="predict"><strong>${esc(i.mistake)}</strong><p>${esc(i.signal)}</p><p>Ask “${esc(i.question)}”</p></div>`).join("")}`
+        : '<p>Preview likely mistakes before you show the problem.</p><button class="copy-action" data-action="forecast">Preview likely mistakes</button>'
+    }</details></section>`;
+}
+function nextMove() {
+  const follow = state.challenge || state.suggested;
+  const lost = state.groups.find((g) => g.id === "lost").count;
+  const pending = state.groups.find((g) => g.id === "unclear").count;
+  const line = lost
+    ? `${lost} of ${state.count} submissions divide by x. Check the zero case together before moving on.`
+    : pending && !follow
+      ? "The work so far needs clarification. Open a response below to review it."
+      : "Use a different equation to check whether students can apply the same reasoning.";
+  if (state.challenge)
+    return `<section class="responses next-move"><h2>Challenge is on phones</h2><p>${esc(follow.prompt)}</p>
+    <p class="small">${state.audienceScored ? `${state.audienceCorrect} of ${state.audienceScored} audience answers earned a point.` : "Waiting for an audience answer."}</p>${board()}</section>`;
+  return `<section class="responses next-move"><h2>What to cover next</h2>
+    <p>${state.count ? esc(line) : "Share the exercise and wait for a first step."}</p>
+    ${
+      follow
+        ? `<div class="follow-preview"><p class="eyebrow">Next question</p><p>${esc(follow.prompt)}</p></div>
+    <button class="send-action" data-action="release">Open challenge on phones ↗</button>`
+        : ""
+    }</section>`;
 }
 function simulationTools() {
   return `<section class="invite-panel walkthrough"><h2>Rehearse the round</h2>
-    <p class="small">Add three prepared classmates to show the feedback loop with one presenter. Audience steps count separately.</p>
+    <p class="small">Six example notebooks are available for rehearsal. Start an empty round to try this exercise with your own class.</p>
     <button class="copy-action" data-action="examples" ${state.examples || state.challenge ? "disabled" : ""}>${state.examples ? "Example class loaded" : "Load example class"}</button>
-    <button class="sample-link" data-pilot="reset">Start a fresh round</button>
+    <button class="sample-link" data-pilot="reset">Start an empty round</button>
     ${confirmRestart ? '<p class="small">Clear submissions and scores for everyone in this demo room?</p><button data-action="restart">Reset round</button> <button data-pilot="keep">Cancel</button>' : ""}</section>`;
 }
 function pilotView() {
   roomHeader(host ? "Tutor view" : "Student view", state.room);
   if (!host) {
     app.className = "pilot student-pilot";
-    const student = `<div class="student-layout">${exerciseCard()}${state.attempt && !editing ? sentCard() : studentComposer()}</div>`;
+    const response = state.attempt && !editing ? sentCard() : studentComposer();
+    const follow = state.showcase && state.challenge ? challengeView() : "";
+    const waiting =
+      state.showcase && state.attempt && !state.challenge
+        ? '<p class="waiting-note">Your tutor can open a follow-up here during class.</p>'
+        : "";
+    const student = `<div class="student-layout">${exerciseCard()}<div class="student-work">${follow}${response}${waiting}</div></div>`;
     app.innerHTML = state.showcase ? studentShowcase(student) : student;
     drawSheets();
     return;
@@ -381,7 +410,7 @@ function pilotView() {
   app.className = "pilot tutor-pilot";
   app.innerHTML = `<div class="tutor-title"><div><p class="section-meta"><span class="live-dot"></span><span data-connection>Room open</span> · ${esc(state.lesson.course)}</p><h1>Class responses</h1></div>
     <a class="project-action" href="${state.showcase ? "/board" : "/board?room=" + esc(state.room)}" target="_blank" rel="noopener">${icon("screen")} Project exercise <span>↗</span></a></div>
-    <div class="tutor-layout"><div class="tutor-main">${exerciseCard()}
+    <div class="tutor-layout"><div class="tutor-main">${exerciseCard()}${state.showcase ? nextMove() : ""}
       <section class="responses"><div class="response-title"><h2>Student steps</h2><span>${state.simulated ? `${state.count - state.examples} audience · ${state.examples} prepared` : `${state.count} sent · ${state.joined} joined`}</span></div>
         ${
           state.count
@@ -389,7 +418,7 @@ function pilotView() {
             : `<div class="empty-responses"><span class="empty-symbol">${icon("sheets")}</span><div><h3>Waiting for the first step</h3><p>Students can scan the QR on the projector to send their working.</p></div></div>`
         }
         ${state.fallbackCount ? `<p class="fallback-note">Live analysis was unavailable for ${state.fallbackCount} current submission(s). Check their working.</p>` : ""}
-      </section>${state.showcase ? tutorControls() : ""}</div><div>${joinPanel()}${state.simulated ? simulationTools() : ""}</div></div>`;
+      </section>${state.showcase ? tutorForecast() : ""}</div><div>${joinPanel()}${state.simulated ? simulationTools() : ""}</div></div>`;
   drawSheets();
 }
 
@@ -404,10 +433,15 @@ function projectorView() {
 }
 
 function render() {
+  const openPanels = [
+    ...app.querySelectorAll("details[data-preserve][open]"),
+  ].map((el) => el.dataset.preserve);
   if (state.pilot && !projection) pilotView();
   else if (host) hostView();
   else if (projection) projectorView();
   else studentView();
+  for (const el of app.querySelectorAll("details[data-preserve]"))
+    el.open = openPanels.includes(el.dataset.preserve);
 }
 function joinForm() {
   roomHeader("Classroom", "");
@@ -744,7 +778,7 @@ async function refresh() {
     if (
       document.activeElement?.matches("textarea,input,select") ||
       document.querySelector(
-        'details[open], form[data-form="score"] input:checked',
+        'details[open]:not([data-preserve]), form[data-form="score"] input:checked',
       )
     )
       return;

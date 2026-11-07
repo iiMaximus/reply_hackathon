@@ -50,7 +50,9 @@ export const variants = {
 };
 
 export function recommend(attempts) {
-  return attempts.some((a) => a.group === "lost") ? "factor" : "shift";
+  if (attempts.some((a) => a.group === "lost" || a.followUp === "factor"))
+    return "factor";
+  return attempts.some((a) => a.group !== "unclear") ? "shift" : null;
 }
 
 export function publicVariant(id) {
@@ -65,3 +67,23 @@ export const practice = {
   explanation:
     "Write h′(x) = x(x + 2). One factor vanishes at x = 0, the other at x = −2. Both are stationary values.",
 };
+
+export function practiceFor(group) {
+  if (group === "lost") return { ...practice, focus: "Checking a division" };
+  if (group === "kept")
+    return {
+      focus: "Shift both roots",
+      prompt: "If h′(x) = (x + 4)(x − 1), where are the horizontal tangents?",
+      explanation:
+        "One factor vanishes at −4 and the other at 1. Both make h′(x) zero.",
+    };
+  if (group === "started")
+    return {
+      focus: "From derivative to equation",
+      prompt:
+        "For h(x) = x² + 6x, write the equation for a horizontal tangent.",
+      explanation:
+        "The slope is h′(x) = 2x + 6. Set that slope equal to zero, then solve to get x = −3.",
+    };
+  return practice;
+}

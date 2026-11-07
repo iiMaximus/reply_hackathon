@@ -1,14 +1,17 @@
 import http from "node:http";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { networkInterfaces } from "node:os";
 import { readFile } from "node:fs/promises";
 import QRCode from "qrcode";
-import { analyze, forecast } from "./analysis.mjs";
-import { notebooks, notebookReview, sampleClass } from "./simulation.mjs";
+import { forecast } from "./analysis.mjs";
+import { runAgent } from "./agent/orchestrator.mjs";
+import { rehearsalPlanner, openAIPlanner } from "./agent/providers.mjs";
+import { readMemory, memoryValue } from "./agent/course.mjs";
+import { notebooks, sampleClass } from "./simulation.mjs";
 import {
   groups,
   lesson,
-  practice,
+  practiceFor,
   publicVariant,
   recommend,
   studentLesson,
@@ -33,7 +36,9 @@ const addr = Object.values(networkInterfaces())
   .flat()
   .find((n) => n?.family === "IPv4" && !n.internal);
 let origin;
-const secret = randomBytes(24).toString("hex");
+const secret = process.env.PRESENTER_SECRET
+  ? createHash("sha256").update(process.env.PRESENTER_SECRET).digest("hex")
+  : randomBytes(24).toString("hex");
 const room = randomBytes(3).toString("hex").toUpperCase();
 let join;
 const people = new Map();
@@ -50,6 +55,21 @@ let prediction = null;
 let predictionJob = null;
 let aiRequests = 0;
 const maxRequests = 120;
+const memoryCookie = simulated || !live ? "demo_practice" : "course_practice";
+function logAgent(event) {
+  console.info(JSON.stringify({ event: "classroom.agent", ...event }));
+}
+async function seedClass() {
+  const prepared = sampleClass();
+  for (const p of prepared)
+    p.attempt = await runAgent({
+      work: p.work,
+      decide: rehearsalPlanner,
+      onEvent: logAgent,
+    });
+  for (const p of prepared) examples.set(p.reviewId, p);
+}
+if (simulated) await seedClass();
 
 const web = new URL("./web/", import.meta.url);
 const files = {
@@ -98,7 +118,7 @@ function cookie(req, name) {
     .find((v) => v.startsWith(name + "="))
     ?.slice(name.length + 1);
 }
-function setCookie(res, name, value) {
+function setCookie(res, name, value, maxAge = 0) {
   if (pilot) name = "poc_" + name;
   res.setHeader(
     "Set-Cookie",
@@ -106,6 +126,7 @@ function setCookie(res, name, value) {
       "=" +
       value +
       "; Path=/; HttpOnly; SameSite=Strict" +
+      (maxAge ? "; Max-Age=" + maxAge : "") +
       (origin.startsWith("https:") ? "; Secure" : ""),
   );
 }
@@ -163,7 +184,10 @@ function dashboard() {
         .map((p) => ({
           id: p.reviewId,
           line: p.attempt.line,
-          ...(p.example ? { example: true } : {}),
+          trace: p.attempt.trace,
+          source: p.attempt.source,
+          handoff: p.attempt.handoff,
+          ...(p.example ? { example: true, exampleName: p.alias } : {}),
           ...(p.attempt.notebook
             ? { photo: "/samples/" + p.attempt.notebook + ".png" }
             : {}),
@@ -192,7 +216,7 @@ function studentView(p) {
     simulated,
     round,
     lesson: studentLesson(),
-    practice,
+    practice: practiceFor(p.attempt?.group),
     challenge: publicVariant(challenge),
     live,
     attempt: p.attempt,
@@ -291,17 +315,18 @@ async function handle(req, res) {
           .filter((p) => p.attempt)
           .map((p) => p.attempt),
       );
+      if (!challenge)
+        fail(409, "Review a clear step before opening a follow-up.");
       releaseReason ??=
         challenge === "factor"
           ? "A step divided by x without showing the zero case."
           : "Test whether students can find both stationary values when the factors change.";
       for (const p of examples.values())
-        p.scored ??= { point: p.alias !== "Sam" };
+        p.scored ??= { point: p.exampleTransfer };
     } else if (simulated && path === "/api/host/examples") {
       if (!examples.size && challenge)
         fail(409, "Restart the round before loading an example class.");
-      if (!examples.size)
-        for (const p of sampleClass()) examples.set(p.reviewId, p);
+      if (!examples.size) await seedClass();
     } else if (simulated && path === "/api/host/restart") {
       examples.clear();
       for (const p of people.values()) {
@@ -340,6 +365,18 @@ async function handle(req, res) {
       if (!p || !Object.hasOwn(groups, input.group))
         fail(400, "That excerpt is unavailable.");
       p.attempt.group = input.group;
+      p.attempt.followUp =
+        input.group === "lost"
+          ? "factor"
+          : input.group === "unclear"
+            ? null
+            : "shift";
+      p.attempt.handoff = input.group === "unclear" ? "ambiguous" : null;
+      p.attempt.trace?.push({
+        step: p.attempt.trace.length + 1,
+        action: "tutor_correction",
+        result: input.group,
+      });
     } else fail(404, "Unknown action.");
     return json(res, dashboard());
   }
@@ -401,20 +438,32 @@ async function handle(req, res) {
     if (openReview.has(p)) fail(409, "Your last step is still being read.");
     openReview.add(p);
     try {
-      const useLive = live && p.reviews < 10 && aiRequests < maxRequests;
-      if (useLive) {
+      const work = { text, image, notebook };
+      const reserve = () => {
+        if (aiRequests >= maxRequests || p.reviews >= 24) return false;
         p.reviews++;
         aiRequests++;
-      }
-      const review = notebook
-        ? notebookReview(notebook)
-        : await analyze({ text, image, live: useLive });
-      if (live && !useLive) review.fallback = true;
-      if (image && review.mode === "rehearsal" && !text)
+        return true;
+      };
+      const review = await runAgent({
+        work,
+        previous: readMemory(cookie(req, memoryCookie)),
+        mode: live ? "live" : notebook ? "scripted" : "rehearsal",
+        decide: live ? openAIPlanner({ reserve }) : rehearsalPlanner,
+        onEvent: logAgent,
+      });
+      const memory = memoryValue(review);
+      if (memory) setCookie(res, memoryCookie, memory, 30 * 86400);
+      if (
+        image &&
+        !live &&
+        !text &&
+        (pilot || showcase) &&
+        input.share === true
+      ) {
         review.hint =
-          (pilot || showcase) && input.share === true
-            ? "Your tutor can read the photo. You can add a line if you want to clarify it."
-            : "Type the line from your photo so the rehearsal can group your step.";
+          "Your tutor can see the photo. Add a line if you want to clarify it.";
+      }
       p.attempt = review;
       p.share = input.share === true;
       if (pilot || showcase) {

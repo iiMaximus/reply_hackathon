@@ -2,21 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { analyze, forecast } from "./analysis.mjs";
+import { forecast } from "./analysis.mjs";
 
-test("live analysis sends the photo and rubric, validates the response, and recovers privately on provider failure", async (t) => {
+test("forecast validates the provider response and marks prepared fallback examples", async (t) => {
   const previous = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = "test-only";
   t.after(() => {
     if (previous === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = previous;
   });
-  const image = "data:image/jpeg;base64,AAAA";
-  const sample = {
-    group: "lost",
-    line: "x − 1 = 0",
-    hint: "Which values allow division?",
-  };
   const packed = (value) => ({
     ok: true,
     json: async () => ({
@@ -28,24 +22,6 @@ test("live analysis sends the photo and rubric, validates the response, and reco
       ],
     }),
   });
-  const read = await analyze(
-    { image, text: "", live: true },
-    async (_url, req) => {
-      const request = JSON.parse(req.body);
-      assert.equal(request.input[0].content[1].image_url, image);
-      assert.match(request.instructions, /separate check of x=0/);
-      assert.equal(request.store, false);
-      return packed(sample);
-    },
-  );
-  assert.equal(read.mode, "live");
-  assert.equal(read.line, sample.line);
-  const offline = await analyze({ image, text: "", live: true }, async () => ({
-    ok: false,
-  }));
-  assert.equal(offline.group, "unclear");
-  assert.equal(offline.fallback, true);
-  assert.equal(offline.line, "");
   const item = {
     mistake: "Omitting a root",
     signal: "Divides by the variable",
@@ -87,10 +63,11 @@ async function startRoom(t, ...flags) {
     }
   });
   let logs = "";
-  for await (const part of child.stdout) {
+  for await (const part of child.stdout.iterator({ destroyOnReturn: false })) {
     logs += part;
     if (logs.includes("Students:")) break;
   }
+  child.stdout.resume();
   const [, base, secret] = logs.match(
     /Professor: (http:\/\/localhost:\d+)\/present#([a-f\d]+)/,
   );
@@ -113,6 +90,33 @@ async function startRoom(t, ...flags) {
 }
 
 test(
+  "a new browser session can reuse its approved last hint without carrying the old classroom response",
+  { timeout: 15000 },
+  async (t) => {
+    const { api } = await startRoom(t, "--simulate");
+    const first = (await api("join", { direct: true })).cookie;
+    const reply = await api(
+      "attempt",
+      { notebook: "divide", share: true },
+      first,
+    );
+    assert.match(reply.cookie, /^demo_practice=v1\.lost\./);
+    const second = (await api("join", { direct: true }, reply.cookie)).cookie;
+    const later = await api(
+      "attempt",
+      { notebook: "divide", share: true },
+      second + "; " + reply.cookie,
+    );
+    assert.notEqual(later.value.attempt.hint, reply.value.attempt.hint);
+    assert.equal(
+      later.value.attempt.trace.find((e) => e.action === "recall_practice")
+        .result,
+      "previous_hint",
+    );
+  },
+);
+
+test(
   "a scripted QR round runs from sample handwriting to a fresh scored challenge, and can be replayed",
   { timeout: 15000 },
   async (t) => {
@@ -127,6 +131,12 @@ test(
     assert.equal(initial.live, false);
     assert.equal(initial.canLive, false);
     assert.match(initial.join, /\/join$/);
+    assert.equal(initial.examples, 6);
+    assert.equal(initial.count, 6);
+    const unclear = initial.groups.find((g) => g.id === "unclear");
+    assert.equal(unclear.count, 1);
+    assert.equal(unclear.excerpts[0].handoff, "ambiguous");
+    await api("host/restart", {}, host);
     assert.equal((await api("host/examples", {}, student)).status, 403);
     assert.equal((await api("host/mode", { live: true }, host)).status, 409);
     assert.equal((await api("host/release", {}, host)).status, 409);
@@ -136,7 +146,7 @@ test(
     const simulated = (
       await api(
         "attempt",
-        { notebook: "divide", share: true, round: 1 },
+        { notebook: "divide", share: true, round: 2 },
         student,
       )
     ).value;
@@ -144,7 +154,7 @@ test(
     assert.equal(simulated.attempt.group, "lost");
     await api(
       "attempt",
-      { notebook: "factor", share: true, round: 1 },
+      { notebook: "factor", share: true, round: 2 },
       student,
     );
     assert.equal(
@@ -153,8 +163,8 @@ test(
     );
     await api("host/examples", {}, host);
     const room = (await api("host/examples", {}, host)).value;
-    assert.equal(room.count, 4);
-    assert.equal(room.examples, 3);
+    assert.equal(room.count, 7);
+    assert.equal(room.examples, 6);
     assert.equal(
       room.groups.find((g) => g.id === "lost").excerpts[0].example,
       true,
@@ -172,28 +182,28 @@ test(
       "Keep every root",
     );
     const projection = (await api("board")).value;
-    assert.equal(projection.examples, 3);
+    assert.equal(projection.examples, 6);
     assert.equal(projection.groups, undefined);
     assert.equal(projection.challenge.key, undefined);
-    await api("score", { answer: 1, reason: 1, round: 1 }, student);
+    await api("score", { answer: 1, reason: 1, round: 2 }, student);
     await api("alias", { alias: "Jo" }, student);
     const complete = (await api("host/state", undefined, host)).value;
     assert.equal(complete.audienceCorrect, 1);
     assert.equal(complete.audienceScored, 1);
-    assert.equal(complete.board.filter((x) => x.example).length, 2);
+    assert.equal(complete.board.filter((x) => x.example).length, 3);
     assert.equal(complete.board.filter((x) => !x.example)[0].alias, "Jo");
     const reset = (await api("host/restart", {}, host)).value;
-    assert.equal(reset.round, 2);
+    assert.equal(reset.round, 3);
     assert.equal(reset.count, 0);
     assert.equal(reset.challenge, null);
     assert.equal(reset.prediction, null);
     assert.deepEqual(reset.board, []);
     assert.equal(
-      (await api("attempt", { notebook: "factor", round: 1 }, student)).status,
+      (await api("attempt", { notebook: "factor", round: 2 }, student)).status,
       409,
     );
     const replay = (await api("state", undefined, student)).value;
-    assert.equal(replay.round, 2);
+    assert.equal(replay.round, 3);
     assert.equal(replay.scored, null);
     assert.equal(replay.attempt, null);
   },

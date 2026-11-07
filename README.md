@@ -4,6 +4,10 @@ Reply Student Tech Clash 2026 · AI on Campus
 
 ## Solution Room
 
+[Join the deployed classroom](https://solution-room-demo.onrender.com/join) · [Open the projector](https://solution-room-demo.onrender.com/board) · [Agent architecture, examples and evaluation](demo/README.md#how-the-classroom-agent-works)
+
+The tutor demo opens midway through an Analisi I exercise: six example attempts are on the desk, two have lost a root, and one needs human review. The simulation uses the same tools, source checks, hint memory and action limits as the OpenAI-backed classroom. Real participants join by QR and are counted separately.
+
 **[Play the simulated classroom](demo/README.md#play-the-simulated-classroom).** Run `npm run demo` or [deploy the simulation on Render](https://render.com/deploy?repo=https://github.com/iiMaximus/reply_hackathon). Students scan straight into the exercise. Try a prepared notebook, see the tutor’s feedback, play the follow-up and compare scores. The simulation is labeled throughout; the model-backed version runs separately with `npm run live`.
 
 **[Try the one-exercise proof of concept first](demo/README.md#start-with-the-proof-of-concept).** Run `npm run poc`. Students send an unfinished step from their phones and a tutor decides what to explain from the incoming work. The guide includes a five-minute classroom test and a criterion for trying a second session.

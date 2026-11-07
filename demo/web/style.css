@@ -1479,3 +1479,46 @@ main.pilot {
     max-width: 360px;
   }
 }
+.student-work {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.waiting-note,
+.reference-line {
+  font-size: 14px;
+  color: #545971;
+}
+.reference-line a,
+.review-trace a {
+  color: #48438a;
+  text-underline-offset: 3px;
+}
+.reference-line {
+  margin: 8px 0 16px;
+}
+.review-trace {
+  margin-top: 9px;
+  font-size: 13px;
+  color: #50576e;
+}
+.review-trace summary,
+.responses details > summary {
+  cursor: pointer;
+}
+.review-trace ol {
+  padding-left: 18px;
+}
+.next-move {
+  border-left: 4px solid #6658cf;
+}
+.follow-preview {
+  border-top: 1px solid #dfdfeb;
+  padding-top: 12px;
+}
+.student-work .lavender {
+  margin: 0;
+}
+.responses > details > summary {
+  font-weight: 650;
+}
