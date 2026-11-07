@@ -67,10 +67,10 @@ try {
   // The demo room was reset. Retire only its previous browser records.
   localStorage.removeItem("showwork-alias");
   localStorage.removeItem("showwork-progress");
-  if (localStorage.getItem("qai-reset-generation") !== "2") {
+  if (localStorage.getItem("qai-reset-generation") !== "equation-entry-v1") {
     localStorage.removeItem("qai-classroom-alias");
     localStorage.removeItem("qai-classroom-progress");
-    localStorage.setItem("qai-reset-generation", "2");
+    localStorage.setItem("qai-reset-generation", "equation-entry-v1");
   }
   rememberedAlias = localStorage.getItem("qai-classroom-alias");
 } catch {}
