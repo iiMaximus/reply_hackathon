@@ -273,7 +273,7 @@ function report(r) {
     ? `<p class="report-unclear">${s.unclear} ${s.unclear === 1 ? "response did" : "responses did"} not show enough working to identify a mistake.</p>`
     : "";
   const observation = evidence.length
-    ? `<ul class="report-findings">${evidence.map((e) => `<li><strong>${e.count}</strong><span>${math(e.error)}</span></li>`).join("")}</ul>`
+    ? `<ul class="report-findings">${evidence.map((e) => `<li><strong>${e.count} ${e.count === 1 ? "student" : "students"}</strong><span>${math(e.error)}</span></li>`).join("")}</ul>`
     : !missing
       ? `<p>${s.reviewed ? "No specific error was identified in the reviewed answers." : "No responses were available for review."}</p>`
       : "";

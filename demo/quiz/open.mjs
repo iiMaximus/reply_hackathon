@@ -698,11 +698,25 @@ export function openClassroom({
       await Promise.all([...round.votes.values()].map((v) => v.work));
       const report = summary(round.q, round.votes);
       const observations = new Map();
+      const findings = new Map();
       for (const vote of round.votes.values()) {
         const label = vote.result?.diagnosis;
         if (label) observations.set(label, (observations.get(label) || 0) + 1);
+        const group = vote.result?.group;
+        // Each student's latest attempt counts once. Use the approved specific
+        // misconception when available; keep distinct unanticipated errors apart.
+        const pattern = round.q.patterns[group];
+        const finding =
+          round.q.reference &&
+          group > 0 &&
+          group < round.q.patterns.length - 1 &&
+          pattern?.label &&
+          !needsEnglish(pattern.label)
+            ? pattern.label
+            : label;
+        if (finding) findings.set(finding, (findings.get(finding) || 0) + 1);
       }
-      report.evidence = [...observations]
+      report.evidence = [...findings]
         .sort((a, b) => b[1] - a[1])
         .map(([error, count]) => ({ error, count }));
       report.unclear = report.groups.at(-1).count;
