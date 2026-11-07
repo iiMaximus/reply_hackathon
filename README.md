@@ -2,6 +2,32 @@
 
 Reply Student Tech Clash 2026 · AI on Campus
 
+## Seven ideas for students and teachers
+
+**Two to try first.** For a student-facing demo, try **Mi sono perso qui** during one Analisi I derivation. For a teacher-facing demo, try **Two correct answers** with one programming assignment. The first depends on whether students can recover their place while the lecture continues. The second can produce an executable example of a problem in the assignment itself.
+
+### Ideas to explore with students with ADHD
+
+Students in a university lecture-capture study described revisiting particular passages to recover material they had missed. A separate interview study of 25 STEM majors with ADHD and/or specific learning disabilities examined their experiences with active learning. These are starting points for design conversations. Ask PoliTO students which situations they recognize, invite them to change the interaction, and make it available to anyone who wants it. [Lecture-capture study](https://link.springer.com/article/10.1007/s10734-024-01201-5) · [STEM student interviews](https://pubmed.ncbi.nlm.nih.gov/36525283/)
+
+| Idea | Classroom moment and agent action | What to test |
+| --- | --- | --- |
+| **Mi sono perso qui** (“I got lost here”) | A student follows line 3 of a derivation, loses line 4, and the lecturer is already at line 7. They tap the last line they understood. Using the lecturer’s worked example, the agent identifies the missing operation, links the relevant lines and asks for one move that lets the student rejoin. | Try it on rationalizing a numerator. Can the student explain why multiplying by the conjugate over itself preserves the expression, then follow the current line? Does finding the recovery card itself cost them another step? |
+| **Riparto da qui** (“I’ll pick up here”) | After an interruption, a student can see their unfinished solution but has forgotten what they were deciding. On pause, the agent turns their selected lines and a few words into an editable bookmark. On return it restores the open decision, e.g. “I found the left-hand limit. What do I still need to check?” | Compare it with bookmarking the page. Can the student resume the right step unaided, and is saving the bookmark less work than restarting? |
+| **Before we compare** | In a circuits lab, one partner announces an answer before the other has formed a prediction. Each gets private thinking time. With both ready, the agent finds where their predictions diverge and configures one simulation to test it. | Add a second bulb in parallel across an ideal voltage source. Do both partners explain what happens to current through the original bulb and distinguish it from total current? |
+
+### Ideas for lecturers and TAs
+
+| Idea | Classroom moment and agent action | What to test |
+| --- | --- | --- |
+| **Two correct answers** | Before publishing a programming lab, the lecturer asks for the “second-largest reading.” The agent writes two plausible interpretations and runs both on a small input. For `[9, 9, 4]`, the second sorted entry is 9, while the second distinct value is 4. The lecturer chooses the intended rule and keeps the example as a test. | Can a TA confirm that both readings fit the original assignment and that the revised sentence resolves the disagreement? |
+| **Rubric twins** | Two TAs disagree about how much a lab conclusion deserves. The agent builds pairs of synthetic answers from their rubric. One pair expresses the same reasoning in terse and polished prose. Another changes exactly one scientific claim. The TAs mark them independently, compare decisions and revise the disputed criterion. | On fresh, instructor-checked pairs, do graders agree when reasoning is equivalent and still catch a genuine scientific error? [University of Iowa on grader calibration](https://pressbooks.uiowa.edu/teaching-handbook/chapter/grading-fairly/) |
+| **Rehearse office hours** | A new TA knows how to solve a problem but hasn't practised eliciting a student's reasoning. Give the agent a TA-approved sample mistake, such as dividing both sides of `x² = x` by `x` and losing the zero solution. The TA has two questions to uncover the assumption. The simulator returns a transcript with the point where the student first explained their move. | Have an experienced TA judge whether the questions exposed the assumption or supplied the missing root. The simulated exchange is rehearsal material. |
+
+### One for a design studio
+
+**The entrance test.** An architecture student hears “the entrance is unclear” during critique and has to decide what to redraw. They mark their intended entrance on a floor plan. Three classmates independently click where they would enter. The agent overlays the anonymous marks, ties the critique to a specific part of the drawing and sets up the same task for a revised plan with fresh readers. Compare the before-and-after clicks. The peers provide the evidence and the designer chooses the revision.
+
 ## What should we build for Analisi Matematica I?
 
 I’d test **Salva la risposta** (“save your answer”) first. A PoliTO student picks the wrong option on a practice quiz. Their challenge is to change one thing in the question that would make their original answer true. Then they have to explain why the change worked.
