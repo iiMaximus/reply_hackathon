@@ -67,6 +67,11 @@ try {
   // The demo room was reset. Retire only its previous browser records.
   localStorage.removeItem("showwork-alias");
   localStorage.removeItem("showwork-progress");
+  if (localStorage.getItem("qai-reset-generation") !== "2") {
+    localStorage.removeItem("qai-classroom-alias");
+    localStorage.removeItem("qai-classroom-progress");
+    localStorage.setItem("qai-reset-generation", "2");
+  }
   rememberedAlias = localStorage.getItem("qai-classroom-alias");
 } catch {}
 
@@ -301,6 +306,12 @@ function verdictBadge(verdict) {
     ? `<span class="answer-verdict ${verdict}">${labels[verdict]}</span>`
     : "";
 }
+function answerPreview(text) {
+  const rendered = math(text);
+  return rendered.includes('class="math-')
+    ? "<small>Equation preview</small><div>" + rendered + "</div>"
+    : "";
+}
 function feedback(result) {
   if (!result)
     return "<p>The agent is reading your response.</p><progress></progress>";
@@ -415,6 +426,7 @@ function student(c) {
   } else if (r.status === "open") {
     html +=
       field("open-answer", "Your response", answer, 4, 2000) +
+      `<div class="equation-tools">${btn("equation", "Insert equation")}<small>Write LaTeX between $ signs.</small></div><div id="answer-preview">${answerPreview(answer)}</div>` +
       `<div class="actions">${btn("send", "Submit response", true, answer.trim() ? "" : "disabled")}${c.photoEnabled ? picker("open-student-photo", "Submit a photo", "image/jpeg,image/png,image/webp") : ""}</div><p class="muted">Your professor sees class patterns. Your feedback is private.</p>`;
   } else
     html +=
@@ -642,6 +654,21 @@ async function act(b) {
       reportId = c.active.id;
       screen = "report";
     });
+  if (a === "equation") {
+    const field = root.querySelector("#open-answer");
+    const start = field.selectionStart,
+      end = field.selectionEnd;
+    if (field.value.length + 4 > field.maxLength) return;
+    field.setRangeText(
+      "\\(" + field.value.slice(start, end) + "\\)",
+      start,
+      end,
+    );
+    field.focus();
+    field.setSelectionRange(start + 2, end + 2);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    return;
+  }
   if (a === "send")
     return task("Checking your response", async () => {
       await post("open/answer", { id: studentId, text: answer });
@@ -699,6 +726,7 @@ document.addEventListener("input", (e) => {
   }
   if (el.id === "open-answer") {
     answer = el.value;
+    root.querySelector("#answer-preview").innerHTML = answerPreview(answer);
     root.querySelector('[data-action-open="send"]').disabled = !answer.trim();
   }
   if (el.id === "open-topic") draft.topic = el.value;

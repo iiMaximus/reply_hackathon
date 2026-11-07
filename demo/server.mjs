@@ -91,7 +91,7 @@ let predictionJob = null;
 let aiRequests = 0;
 const maxRequests = 120;
 const memoryCookie =
-  simulated || !live ? "qai_demo_practice" : "qai_course_practice";
+  simulated || !live ? "qai_demo_practice_2" : "qai_course_practice_2";
 function logAgent(event) {
   console.info(JSON.stringify({ event: "classroom.agent", ...event }));
 }
@@ -452,9 +452,12 @@ async function handle(req, res) {
     if (type.startsWith("text/html"))
       res.setHeader(
         "Set-Cookie",
-        ["demo_practice", "course_practice"].map(
-          (name) => name + "=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax",
-        ),
+        [
+          "demo_practice",
+          "course_practice",
+          "qai_demo_practice",
+          "qai_course_practice",
+        ].map((name) => name + "=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"),
       );
     res.setHeader("Content-Type", type);
     res.end(await readFile(file));
