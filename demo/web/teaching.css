@@ -535,3 +535,14 @@ body.open-room {
 .sent-badge span { font-size: 16px; }
 .open-room button.primary:hover, .open-room .upload-area .file-button:hover { background: #35308c; }
 .open-room .board-layout > section { min-width: 0; }
+.lucide-icon {
+  display: inline-block;
+  width: 1.08em;
+  height: 1.08em;
+  flex: none;
+  background: currentColor;
+  mask: var(--icon) center / contain no-repeat;
+  vertical-align: -.15em;
+}
+.open-room button:has(.lucide-icon), .open-room .file-button { gap: .45em; }
+.open-room .feedback h3, .open-room .focus-topic { font-size: 1rem; margin: 1em 0 .25em; color: var(--action); }

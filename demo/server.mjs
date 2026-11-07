@@ -111,7 +111,34 @@ if (simulated) await seedClass();
 
 const web = new URL("./web/", import.meta.url);
 const mathDist = new URL("../node_modules/katex/dist/", import.meta.url);
+const classroomIcons = [
+  "send",
+  "radio",
+  "chart-column",
+  "copy",
+  "pencil",
+  "arrow-left",
+  "scan-text",
+  "notebook-pen",
+  "upload",
+  "camera",
+  "target",
+  "circle-check",
+  "presentation",
+];
 const files = {
+  ...Object.fromEntries(
+    classroomIcons.map((name) => [
+      "/icons/" + name + ".svg",
+      [
+        new URL(
+          "../node_modules/lucide-static/icons/" + name + ".svg",
+          import.meta.url,
+        ),
+        "image/svg+xml",
+      ],
+    ]),
+  ),
   "/math.js": [new URL("math.js", web), "text/javascript; charset=utf-8"],
   "/math/katex.mjs": [
     new URL("katex.mjs", mathDist),

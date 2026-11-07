@@ -1,10 +1,24 @@
 import { escapeHTML as h, mathText as math } from "/math.js";
+const actionIcons = {
+  send: "send",
+  publish: "radio",
+  close: "chart-column",
+  copy: "copy",
+  revise: "pencil",
+  back: "arrow-left",
+  analyze: "scan-text",
+  progress: "notebook-pen",
+};
+const icon = (name) =>
+  name
+    ? `<span class="lucide-icon" aria-hidden="true" style="--icon:url('/icons/${name}.svg')"></span>`
+    : "";
 const btn = (action, label, primary = false, extra = "") =>
-  `<button type="button" data-action-open="${action}" class="${primary ? "primary" : ""}" ${extra}>${math(label)}</button>`;
+  `<button type="button" data-action-open="${action}" class="${primary ? "primary" : ""}" ${extra}>${icon(actionIcons[action])}${math(label)}</button>`;
 const field = (id, label, value, rows = 3, max = 3000) =>
   `<label class="field" for="${id}">${h(label)}</label><textarea id="${id}" rows="${rows}" maxlength="${max}">${h(value)}</textarea>`;
 const picker = (id, label, accept) =>
-  `<label class="file-button">${h(label)}<input id="${id}" type="file" accept="${accept}"></label>`;
+  `<label class="file-button">${icon(id === "open-file" ? "upload" : "camera")}${h(label)}<input id="${id}" type="file" accept="${accept}"></label>`;
 const status = (label) =>
   `<div class="status-line ${label === "Open for responses" ? "is-live" : ""}"><span class="status-dot"></span>${h(label)}</div>`;
 const heading = (title, desc = "") =>
@@ -224,7 +238,7 @@ function report(r) {
         : "Anonymous responses to the class question.",
     ) +
     `<section class="panel"><p class="question">${math(r.prompt)}</p>${stats(r.summary)}<div class="report-grid"><section><h2>Reasoning patterns</h2>${breakdown(r.summary)}</section>
-    <section><h2>What to teach next</h2><p>${math(r.summary.move || "There are no responses to interpret.")}</p>${r.summary.engine ? `<small>${h(r.summary.engine)}</small>` : ""}</section></div></section><div class="actions">${btn("back", "Prepare another question", true)}</div>`
+    <section><h2>${icon("presentation")} What to teach next</h2>${r.summary.practiceTopic ? `<h3 class="focus-topic">${icon("target")} ${math(r.summary.practiceTopic)}</h3>` : ""}<p>${math(r.summary.move || "There are no responses to interpret.")}</p>${r.summary.engine ? `<small>${h(r.summary.engine)}</small>` : ""}</section></div></section><div class="actions">${btn("back", "Prepare another question", true)}</div>`
   );
 }
 function teacher(c) {
@@ -254,12 +268,18 @@ function remember(r, v) {
     topic: r.topic,
     text: v.text,
     hint: v.result.hint,
+    practice: v.result.practice,
   };
   if (saved.find((x) => x.id === r.id)?.text === row.text) return;
   saved = [row, ...saved.filter((x) => x.id !== r.id)].slice(0, 40);
   try {
     localStorage.setItem("showwork-progress", JSON.stringify(saved));
   } catch {}
+}
+function feedback(result) {
+  if (!result)
+    return "<p>The agent is reading your response.</p><progress></progress>";
+  return `<p>${math(result.hint)}</p>${result.practice ? `<h3>${icon("target")} Practice next</h3><p>${math(result.practice)}</p>` : ""}`;
 }
 function student(c) {
   const r = c.active,
@@ -279,7 +299,7 @@ function student(c) {
       heading("My work", "Your responses are saved on this browser.") +
       `<section class="panel">${
         item
-          ? `${btn("progress", "All responses")}<p class="question">${math(item.prompt)}</p><h2>Your response</h2><p class="written">${math(item.text)}</p><h2>Feedback</h2><p>${math(item.hint)}</p>`
+          ? `${btn("progress", "All responses")}<p class="question">${math(item.prompt)}</p><h2>Your response</h2><p class="written">${math(item.text)}</p><h2>Feedback</h2>${feedback(item)}`
           : saved.length
             ? saved
                 .map((x) =>
@@ -304,8 +324,8 @@ function student(c) {
     ) +
     `<section class="panel"><p class="question">${math(r.prompt)}</p>${imageOf(r)}`;
   if (v && (!editing || r.status !== "open")) {
-    html += `<div class="sent-badge"><span aria-hidden="true">✓</span> Response submitted</div><h2>Your response</h2><p class="written">${math(v.text)}</p><div class="feedback"><h2>Private feedback</h2><p>${math(v.result?.hint || "The agent is reading your response.")}</p>
-    ${v.result ? `<small>${h(v.result.engine)}</small>` : "<progress></progress>"}</div>
+    html += `<div class="sent-badge">${icon("circle-check")} Response submitted</div><h2>Your response</h2><p class="written">${math(v.text)}</p><div class="feedback"><h2>Private feedback</h2>${feedback(v.result)}
+    ${v.result ? `<small>${h(v.result.engine)}</small>` : ""}</div>
     ${r.status === "open" && v.result ? btn("revise", "Revise response") : ""}`;
   } else if (r.status === "open") {
     html +=

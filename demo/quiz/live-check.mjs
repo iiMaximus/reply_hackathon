@@ -53,11 +53,19 @@ await room.answer(mistaken, {
 const wrong = room.student(mistaken).receipt.result;
 assert.equal(wrong.engine, cloud.model);
 assert.ok(
+  wrong.practice,
+  "A student with an identified mistake receives a practice suggestion.",
+);
+assert.ok(
   wrong.group > 0,
   "Contradicting the reference must not count as the expected reasoning.",
 );
 await room.close(id);
 assert.equal(room.host().active.summary.engine, cloud.model);
+assert.ok(
+  room.host().active.summary.practiceTopic,
+  "Observed difficulties inform the teaching focus.",
+);
 assert.equal(calls, 4);
 console.log(
   "Verified open question, private response feedback and anonymous class report using",
