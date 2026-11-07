@@ -287,6 +287,23 @@ function studentView(p) {
   };
 }
 
+function joinStudent(res) {
+  if (people.size >= (pilot ? 20 : 300)) fail(429, "This demo room is full.");
+  const token = randomBytes(20).toString("hex");
+  const p = {
+    reviewId: randomBytes(8).toString("hex"),
+    alias: "",
+    attempt: null,
+    share: false,
+    version: 0,
+    scored: null,
+    reviews: 0,
+  };
+  people.set(token, p);
+  setCookie(res, "student", token);
+  return p;
+}
+
 async function handle(req, res) {
   const url = new URL(req.url, "http://localhost");
   const path = url.pathname;
@@ -453,7 +470,22 @@ async function handle(req, res) {
     } else fail(404, "Unknown action.");
     return json(res, dashboard());
   }
-  let p = people.get(cookie(req, "student"));
+  const token = cookie(req, "student");
+  let p = people.get(token);
+  // A sleeping/redeployed Render process has a new in-memory room. Rejoin
+  // already-open quiz tabs; a live vote still has to match the current round.
+  if (
+    !p &&
+    showcase &&
+    res.quizView &&
+    token &&
+    /^[a-f0-9]{40}$/.test(token) &&
+    (path === "/api/state" ||
+      path === "/api/quiz/practice" ||
+      path === "/api/quiz/vote")
+  ) {
+    p = joinStudent(res);
+  }
   if (path === "/api/join" && req.method === "POST") {
     const input = await body(req);
     if (input.room !== room && input.direct !== true)
@@ -461,22 +493,7 @@ async function handle(req, res) {
         404,
         "Scan the room code on the projector or enter the six characters.",
       );
-    if (!p) {
-      if (people.size >= (pilot ? 20 : 300))
-        fail(429, "This demo room is full.");
-      const token = randomBytes(20).toString("hex");
-      p = {
-        reviewId: randomBytes(8).toString("hex"),
-        alias: "",
-        attempt: null,
-        share: false,
-        version: 0,
-        scored: null,
-        reviews: 0,
-      };
-      people.set(token, p);
-      setCookie(res, "student", token);
-    }
+    p ??= joinStudent(res);
     return json(res, studentView(p));
   }
   if (!p) fail(403, "Join the room first.");

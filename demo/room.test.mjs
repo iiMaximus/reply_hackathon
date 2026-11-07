@@ -402,3 +402,28 @@ test("a professor reviews an imported question, phones vote privately, and the p
   assert.equal(next.active.total, 0);
   assert.equal((await api("quiz/vote" + view, attempt, b)).status, 409);
 });
+
+test("an open quiz tab reconnects after a server restart without applying an old live vote", async (t) => {
+  const { api } = await startRoom(t, "--simulate");
+  const stale = "student=" + "a".repeat(40);
+  const state = await api("state?view=quiz", undefined, stale);
+  assert.equal(state.status, 200);
+  assert.ok(state.cookie && state.cookie !== stale);
+  assert.equal(
+    (
+      await api(
+        "quiz/vote?view=quiz",
+        { id: "old-poll", answer: 0 },
+        state.cookie,
+      )
+    ).status,
+    409,
+  );
+  const result = await api(
+    "quiz/practice?view=quiz",
+    { id: "practice-calculus", answer: 1, reason: 1 },
+    stale,
+  );
+  assert.equal(result.status, 200);
+  assert.equal(result.value.quizPractice.receipt.right, false);
+});
