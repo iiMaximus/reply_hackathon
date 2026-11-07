@@ -44,7 +44,9 @@ export async function quizView(root, user, quizId, refresh) {
       await api(`/quizzes/${quizId}/submissions`, { method: 'POST', body: { answer: input.answer, image_id } });
       toast('Answer saved.'); await refresh();
     } catch (error) {
-      progress.textContent = 'Check your answer history before resubmitting if the connection was interrupted.';
+      progress.textContent = error.status === 422
+        ? 'Your answer was not submitted. Edit it and try again.'
+        : 'Check your answer history before resubmitting if the connection was interrupted.';
       throw error;
     }
   });

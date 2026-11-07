@@ -25,7 +25,13 @@ export function createMarkdownRenderer({ Marked, markedKatex, sanitize }) {
       };
     }
 
-    const parser = new Marked({ gfm: true, breaks: true }, extension);
+    const parser = new Marked({
+      gfm: true, breaks: true,
+      renderer: {
+        // Use static accessible text instead of enabling user-supplied form inputs.
+        checkbox: ({ checked }) => `<span class="task-state" role="img" aria-label="${checked ? 'Completed' : 'Not completed'}">${checked ? '☑' : '☐'}</span> `,
+      },
+    }, extension);
     const cleanHtml = sanitize(parser.parse(value || ''), {
       FORBID_TAGS: ['img','style','form','input','button','iframe','video','audio'],
       FORBID_ATTR: ['style'],

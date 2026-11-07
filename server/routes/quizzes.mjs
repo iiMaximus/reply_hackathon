@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { attachment, classAccess, id, insist, notify, notifyClass, publicQuiz, quizAccess, serializeSubmission, student, text, title } from '../access.mjs';
+import { requireAppropriateAnswer } from '../moderation.mjs';
 
 const imageId = id.nullable().optional();
 const questionInput = z.object({
@@ -60,6 +61,8 @@ export function quizRoutes(db, grading) {
     const input = z.object({ answer: text.default(''), image_id: imageId })
       .refine(s => s.answer || s.image_id, { message: 'Write an answer or attach an image.' }).parse(req.body);
     attachment(db, req.user, quiz.class_id, input.image_id, 'answer');
+    // Reject before storing a submission or invoking any model. Images do not bypass text checks.
+    requireAppropriateAnswer(input.answer);
     insist(!db.prepare("SELECT 1 FROM submissions WHERE quiz_id=? AND student_id=? AND status='pending'")
       .get(quiz.id, req.user.id), 409, 'Your previous answer is still being assessed.');
     const result = db.prepare('INSERT INTO submissions(quiz_id,student_id,answer,image_id) VALUES (?,?,?,?)')
@@ -81,6 +84,7 @@ export function quizRoutes(db, grading) {
     const submission = db.prepare('SELECT * FROM submissions WHERE id=?').get(id.parse(req.params.submissionId));
     insist(submission, 404, 'Submission not found.');
     const quiz = quizAccess(db, req.user, submission.quiz_id, true);
+    requireAppropriateAnswer(submission.answer);
     insist(!grading.isRunning(submission.id), 409, 'Wait for assessment to finish.');
     const { score, note } = z.object({ score: z.coerce.number().min(0).max(100), note: z.string().trim().min(1).max(5000) }).parse(req.body);
     db.prepare("UPDATE submissions SET score=?,status='graded',review_note=?,reviewed_by=? WHERE id=?")

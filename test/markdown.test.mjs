@@ -35,6 +35,14 @@ test('code fences, inline code and escaped dollars remain literal; GFM still wor
   assert.match(document.body.textContent, /\$20/);
 });
 
+test('task lists retain accessible checked states without allowing arbitrary form inputs', () => {
+  const document = documentFor('- [x] Complete\n- [ ] Pending\n\n<input type="text" value="unsafe">');
+  const states = [...document.querySelectorAll('.task-state')];
+  assert.deepEqual(states.map(state => state.textContent), ['☑', '☐']);
+  assert.deepEqual(states.map(state => state.getAttribute('aria-label')), ['Completed', 'Not completed']);
+  assert.equal(document.querySelectorAll('input').length, 0);
+});
+
 test('malformed TeX does not crash the page, and neither Markdown nor TeX can inject scripts', () => {
   const document = documentFor(String.raw`<img src=x onerror="alert(1)"><script>alert(1)</script>
 <span style="position:fixed" onclick="alert(1)">Text</span>

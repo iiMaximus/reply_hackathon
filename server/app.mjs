@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { SQLiteSessionStore } from './database.mjs';
-import { insist, requireLogin } from './access.mjs';
+import { HttpError, insist, requireLogin } from './access.mjs';
 import { createGradingService } from './grading.mjs';
 import { authRoutes } from './routes/auth.mjs';
 import { classRoutes } from './routes/classes.mjs';
@@ -70,7 +70,9 @@ export function createApp({ db, ai, sessionSecret, trustProxy = false }) {
     if (error.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'Images must be 8 MB or smaller.' });
     const status = error.status ?? (error.name === 'MulterError' ? 400 : 500);
     if (status >= 500) console.error('Request failed:', error.name, error.status ?? 'internal');
-    res.status(status).json({ error: status >= 500 ? 'The request could not be completed. Your saved work is preserved.' : error.message });
+    const message = status >= 500 && !(error instanceof HttpError)
+      ? 'The request could not be completed. Your saved work is preserved.' : error.message;
+    res.status(status).json({ error: message });
   });
   return app;
 }

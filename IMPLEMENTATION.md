@@ -10,6 +10,8 @@ server/
   access.mjs            Shared validation, authorization and notification helpers
   ai.mjs                OpenAI client, prompts and Zod output schemas
   grading.mjs           Save/assess/retry lifecycle and evidence checks
+  moderation.mjs        Server-side classroom slur policy before storage/scoring
+  ollama.mjs            Local-only inference adapter for opt-in tests
   routes/
     auth.mjs            Registration, login, logout, current account
     classes.mjs         Classes, joining, roster, whitelist and blocking
@@ -38,9 +40,13 @@ Classes default to professor approval. Open classes admit anyone with the code; 
 
 Passwords are bcrypt hashes. Sessions persist in SQLite and use HTTP-only, SameSite=Strict cookies. Mutations require the app's custom request header and reject foreign Origins. API input uses bound SQL parameters. Images are signature-checked, limited to 8 MB and served through authorized routes. Markdown HTML is sanitized and remote Markdown images are disabled. No API keys are returned to browsers. Only enable `TRUST_PROXY=1` behind a trusted reverse proxy.
 
+Authentication has separate 15-minute limits: 500 registration requests per network, 1,000 failed login requests per network, and 10 failed logins per normalized email/network pair. Successful logins do not consume either failed-login allowance. These limits let a classroom share Wi-Fi while retaining account-level password-guessing protection. Class PATCH requests update only the supplied fields; omitted access policies and descriptions are preserved.
+
 ## Questions, scores and history
 
 All Markdown views and previews support inline LaTeX (`$x^2$`) and display LaTeX (`$$\frac{a}{b}$$`, including multiline blocks), using KaTeX and marked-katex-extension. Code spans/fences stay literal. KaTeX assets/fonts are served locally. Untrusted HTML is sanitized separately from library-generated math, preserving fraction/matrix layout while keeping unsafe LaTeX commands disabled. Escape literal dollar signs with `\$`.
+
+GitHub-style task lists render checked/unchecked states as accessible static symbols, without allowing arbitrary HTML form inputs. Intentional application errors (including missing AI configuration) retain actionable messages; unexpected server/provider exceptions remain masked.
 
 The first version treats each quiz as one open-ended question. A question can combine text/Markdown and one image, optional private reference answer and rubric, and a positive score weight (default 1, maximum 1000). Closing or archiving a question preserves submissions and feedback. Reopening allows revisions.
 
@@ -59,6 +65,10 @@ Leaderboard points equal **weight × score / 100** for the **latest attempt per 
 Statistics show respondents/enrolled, assessed-answer mean, distribution, misconceptions and a review queue. They use latest attempts only. Unreviewed/failed answers are excluded from score means. AI concept labels corrected by a professor are excluded from concept aggregates to avoid presenting rejected labels as facts. Personal strengths and weaknesses describe submitted answers, not fixed learner traits.
 
 ## AI and resources
+
+Student answer text is checked on the server before a submission is stored or any grading request is sent. A configured English slur policy uses Obscenity's matchers plus Unicode/HTML normalization and spelled-out token normalization. Matching submissions receive HTTP 422 with an actionable message, without echoing the offending text, creating a submission or awarding points. Retries and professor scoring also enforce the policy on older records. Ordinary frustration (for example, “I hate this integral”) is allowed. This is a bounded lexical policy, not comprehensive multilingual/contextual hate-speech classification or OCR moderation. Photo-only content requires vision or human inspection; a text-only model cannot certify it.
+
+Assessment output is also checked before points are awarded. A nonempty review reason forces review even if the model incorrectly sets its flag to false. Missing/empty evidence or unmatched quotations in typed answers also force review. Local test-provider feedback always requires professor approval and never awards points automatically.
 
 Approved text resources, the reference answer, rubric and question/answer images are supplied to the model. Context is bounded to the 12 most recent approved resources and up to four resource images. Linked websites are never silently fetched. Resource changes affect subsequent assessments; existing feedback stays as saved.
 
@@ -85,7 +95,7 @@ GET    /classes
 POST   /classes                          {name,description?,join_mode?}
 POST   /classes/join                     {code}
 GET    /classes/:id
-PATCH  /classes/:id                      {name,description?,join_mode?}
+PATCH  /classes/:id                      {name?,description?,join_mode?} (at least one field)
 GET    /classes/:id/members
 PUT    /classes/:id/whitelist             {emails:[]}
 PATCH  /classes/:id/members/:userId       {status:active|blocked}
@@ -109,11 +119,13 @@ GET    /classes/:id/stats
 POST   /classes/:id/summary
 GET    /classes/:id/leaderboard
 GET    /progress
-GET    /notifications
-POST   /notifications/read               {ids:[]}
+GET    /notifications                    optional ?before=<id>; returns next_cursor for older history
+POST   /notifications/read               {ids:[]} or {all:true} (current account only)
 ```
 
 ## Development and deployment
+
+For explicit local inference tests, pull `hf.co/mradermacher/Qwen2.5-0.5B-Instruct-uncensored-GGUF:Q4_K_M` into the running Ollama server, then run `npm run test:ollama`. Override with `OLLAMA_TEST_MODEL`, `OLLAMA_URL`, or `OLLAMA_TEST_REPORT` (default report `/tmp/classroom-ollama-results.json`). The suite uses isolated in-memory SQLite and the same classroom prompts/output schemas, with tighter output lengths for the small model. It tests answer storage, evidence guards, hateful-text rejection before inference, summary/follow-up publishing, notifications, image limitations and professor override. A separate model-quality gate checks simple score thresholds and intentionally fails when the model cannot distinguish correct from incorrect reasoning. Passing application guardrails does not imply passing model quality. The public server continues to use OpenAI; this test suite does not change `.env` or use the production database.
 
 For Cloudflare Tunnel, configure the published hostname's service as **HTTP → localhost:4173**. Cloudflare provides public HTTPS while the local app serves HTTP. Set `TRUST_PROXY=1` in `.env` and restart the app so HTTPS Origin checks and secure session cookies recognize the tunnel's forwarded protocol. Using `https://localhost:4173` as the origin causes a TLS handshake error and a public 502.
 

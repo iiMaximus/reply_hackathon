@@ -4,7 +4,13 @@ import { z } from 'zod';
 import { classAccess, email, id, insist, notify, professor, student, text, title } from '../access.mjs';
 
 const settings = z.object({
-  name: title, description: text.default(''), join_mode: z.enum(['open','approval','whitelist']).default('approval'),
+  name: title, description: text, join_mode: z.enum(['open','approval','whitelist']),
+});
+const createSettings = settings.extend({
+  description: text.default(''), join_mode: settings.shape.join_mode.default('approval'),
+});
+const updateSettings = settings.partial().refine(value => Object.keys(value).length > 0, {
+  message: 'Supply at least one class setting to update.',
 });
 
 export function classRoutes(db) {
@@ -19,7 +25,7 @@ export function classRoutes(db) {
   });
   router.post('/', (req, res) => {
     professor(req);
-    const input = settings.parse(req.body);
+    const input = createSettings.parse(req.body);
     const code = randomBytes(5).toString('hex').toUpperCase();
     const result = db.prepare('INSERT INTO classes(professor_id,name,description,code,join_mode) VALUES (?,?,?,?,?)')
       .run(req.user.id, input.name, input.description, code, input.join_mode);
@@ -47,7 +53,7 @@ export function classRoutes(db) {
   });
   router.patch('/:classId', (req, res) => {
     const classroom = classAccess(db, req.user, req.params.classId, true);
-    const input = settings.parse(req.body);
+    const input = { ...classroom, ...updateSettings.parse(req.body) };
     db.prepare('UPDATE classes SET name=?,description=?,join_mode=? WHERE id=?')
       .run(input.name, input.description, input.join_mode, classroom.id);
     res.json({ ok: true });

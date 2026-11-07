@@ -91,13 +91,24 @@ export function insightRoutes(db, ai) {
       WHERE n.user_id=? AND (c.professor_id=? OR EXISTS
         (SELECT 1 FROM members m WHERE m.class_id=c.id AND m.user_id=? AND m.status='active'))`;
     const args = [req.user.id, req.user.id, req.user.id];
-    res.json({ notifications: db.prepare(`SELECT n.* ${visibility} ORDER BY n.id DESC LIMIT 100`).all(...args),
+    const before = req.query.before === undefined ? null : id.parse(req.query.before);
+    const page = db.prepare(`SELECT n.* ${visibility} AND (? IS NULL OR n.id<?) ORDER BY n.id DESC LIMIT 101`)
+      .all(...args, before, before);
+    const hasMore = page.length > 100;
+    const notifications = page.slice(0, 100);
+    res.json({ notifications, next_cursor: hasMore ? notifications.at(-1).id : null,
       unread: db.prepare(`SELECT COUNT(*) AS n ${visibility} AND n.read_at IS NULL`).get(...args).n });
   });
   router.post('/notifications/read', (req, res) => {
-    const { ids } = z.object({ ids: z.array(id).max(100) }).parse(req.body);
+    const input = z.union([
+      z.object({ all: z.literal(true) }), z.object({ ids: z.array(id).max(100) }),
+    ]).parse(req.body);
+    if ('all' in input) {
+      db.prepare('UPDATE notifications SET read_at=CURRENT_TIMESTAMP WHERE user_id=? AND read_at IS NULL').run(req.user.id);
+      return res.json({ ok: true });
+    }
     const update = db.prepare('UPDATE notifications SET read_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?');
-    for (const notificationId of ids) update.run(notificationId, req.user.id);
+    for (const notificationId of input.ids) update.run(notificationId, req.user.id);
     res.json({ ok: true });
   });
   return router;

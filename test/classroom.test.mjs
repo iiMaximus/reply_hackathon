@@ -253,3 +253,139 @@ test('HTTPS reverse proxy supports same-origin sign-up and secure session cookie
     .set('X-Forwarded-Proto', 'https').set('X-Requested-With', 'classroom').send({});
   assert.equal(foreignOrigin.status, 403, 'Proxy support must preserve cross-origin rejection.');
 });
+
+test('shared-network signup traffic does not exhaust login or the old 40-request signup budget', async t => {
+  const { teacher, learner } = setup(t);
+  const user = await register(teacher, 'professor', 'teacher@example.test');
+  for (let i = 0; i < 41; i++) {
+    assert.equal((await mutate(learner, 'post', '/auth/register', {})).status, 400);
+  }
+  await register(learner, 'student', 'new-student@example.test');
+  assert.equal((await mutate(teacher, 'post', '/auth/login', { email: user.email, password: 'classroom-test-password' })).status, 200);
+});
+
+test('successful logins do not consume the account failed-attempt allowance', async t => {
+  const { teacher } = setup(t);
+  const user = await register(teacher, 'professor', 'teacher@example.test');
+  for (let i = 0; i < 41; i++) {
+    const response = await mutate(teacher, 'post', '/auth/login', { email: user.email, password: 'classroom-test-password' });
+    assert.equal(response.status, 200, `Successful login ${i + 1}: ${response.text}`);
+  }
+});
+
+test('repeated failed logins are limited per normalized account and network, without blocking other accounts', async t => {
+  const { teacher, learner, stranger } = setup(t);
+  await register(teacher, 'professor', 'teacher@example.test');
+  await register(learner, 'student', 'student@example.test');
+  for (let i = 0; i < 10; i++) {
+    assert.equal((await mutate(stranger, 'post', '/auth/login', { email: i % 2 ? 'TEACHER@example.test' : 'teacher@example.test', password: 'wrong-password' })).status, 401);
+  }
+  const limited = await mutate(stranger, 'post', '/auth/login', { email: 'teacher@example.test', password: 'wrong-password' });
+  assert.equal(limited.status, 429);
+  assert.ok(Number(limited.headers['retry-after']) > 0);
+  assert.equal((await mutate(learner, 'post', '/auth/login', { email: 'student@example.test', password: 'classroom-test-password' })).status, 200);
+  await register(stranger, 'student', 'another-student@example.test');
+});
+
+test('partial class updates preserve other fields and allow intentional clearing', async t => {
+  const { teacher } = setup(t);
+  await register(teacher, 'professor', 'teacher@example.test');
+  const c = await classroom(teacher, 'whitelist');
+  await mutate(teacher, 'patch', `/classes/${c.id}`, { description: 'Keep this description' });
+  assert.equal((await mutate(teacher, 'patch', `/classes/${c.id}`, { name: 'Renamed' })).status, 200);
+  const updated = (await teacher.get(`/api/classes/${c.id}`)).body.classroom;
+  assert.equal(updated.name, 'Renamed'); assert.equal(updated.description, 'Keep this description');
+  assert.equal(updated.join_mode, 'whitelist');
+  assert.equal((await mutate(teacher, 'patch', `/classes/${c.id}`, { description: '' })).status, 200);
+  assert.equal((await teacher.get(`/api/classes/${c.id}`)).body.classroom.description, '');
+  assert.equal((await mutate(teacher, 'patch', `/classes/${c.id}`, {})).status, 400);
+});
+
+test('older notification history is reachable and mark-all clears every own unread message only', async t => {
+  const { teacher, learner, db } = setup(t);
+  const professor = await register(teacher, 'professor', 'teacher@example.test');
+  const student = await register(learner, 'student', 'student@example.test');
+  const c = await classroom(teacher); await joinClass(learner, c);
+  db.prepare('DELETE FROM notifications').run();
+  const insert = db.prepare('INSERT INTO notifications(user_id,class_id,message) VALUES (?,?,?)');
+  for (let i = 0; i < 105; i++) insert.run(professor.id, c.id, `Test ${i}`);
+  insert.run(student.id, c.id, 'Private student notification');
+  const first = (await teacher.get('/api/notifications')).body;
+  assert.equal(first.unread, 105); assert.equal(first.notifications.length, 100);
+  assert.ok(first.next_cursor);
+  const second = (await teacher.get(`/api/notifications?before=${first.next_cursor}`)).body;
+  assert.equal(second.notifications.length, 5); assert.equal(second.next_cursor, null);
+  assert.equal(new Set([...first.notifications, ...second.notifications].map(n => n.id)).size, 105);
+  assert.equal((await teacher.get('/api/notifications?before=invalid')).status, 400);
+  assert.equal((await mutate(teacher, 'post', '/notifications/read', { all: true })).status, 200);
+  assert.equal((await teacher.get('/api/notifications')).body.unread, 0);
+  const studentPage = (await learner.get('/api/notifications')).body;
+  assert.equal(studentPage.unread, 1, 'Mark-all must not touch another user’s notifications.');
+  await mutate(learner, 'post', '/notifications/read', { ids: studentPage.notifications.map(n => n.id) });
+  assert.equal((await learner.get('/api/notifications')).body.unread, 0, 'Existing selected-ID API still works.');
+});
+
+test('safe AI setup errors are actionable while unexpected provider details stay private', async t => {
+  const ai = { ...fakeAI, configured: false };
+  const { teacher, learner } = setup(t, ai);
+  await register(teacher, 'professor', 'teacher@example.test');
+  await register(learner, 'student', 'student@example.test');
+  const c = await classroom(teacher); await joinClass(learner, c);
+  const missingKey = await mutate(teacher, 'post', `/classes/${c.id}/summary`);
+  assert.equal(missingKey.status, 503);
+  assert.match(missingKey.body.error, /OPENAI_API_KEY/);
+  ai.configured = true;
+  const quiz = await question(teacher, c);
+  await mutate(learner, 'post', `/quizzes/${quiz}/submissions`, { answer: 'Cubic scaling cancels.' });
+  ai.summarize = async () => { throw Object.assign(new Error('PRIVATE_PROVIDER_DETAILS'), { status: 503 }); };
+  const providerFailure = await mutate(teacher, 'post', `/classes/${c.id}/summary`);
+  assert.equal(providerFailure.status, 503);
+  assert.ok(!providerFailure.text.includes('PRIVATE_PROVIDER_DETAILS'));
+  assert.match(providerFailure.body.error, /could not be completed/);
+});
+
+test('hateful answers are rejected before storage or AI, including obfuscated text with an image', async t => {
+  let modelCalls = 0;
+  const ai = { ...fakeAI, assess: async input => { modelCalls++; return fakeAI.assess(input); } };
+  const { teacher, learner, db } = setup(t, ai);
+  await register(teacher, 'professor', 'professor@example.test');
+  const student = await register(learner, 'student', 'student@example.test');
+  const c = await classroom(teacher); await joinClass(learner, c); const quiz = await question(teacher, c);
+  const image_id = await uploadImage(learner, c);
+  const variants = ['i hate niggers', 'I HATE NIGGERS', 'I hate n1gg3rs', 'I hate n i g g e r s',
+    'I hate ni\u200bggers', 'I hate ｎｉｇｇｅｒｓ', 'I hate n&#105;ggers', 'I hate nіggеrs'];
+  for (const answer of variants) {
+    const rejected = await mutate(learner, 'post', `/quizzes/${quiz}/submissions`, { answer, image_id });
+    assert.equal(rejected.status, 422, rejected.text);
+    assert.match(rejected.body.error, /hateful language/);
+    assert.ok(!rejected.body.error.includes(answer), 'Errors must not echo the slur.');
+  }
+  assert.equal(modelCalls, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM submissions').get().n, 0);
+  assert.equal((await learner.get(`/api/classes/${c.id}/leaderboard`)).body.leaderboard[0].points, 0);
+  assert.equal((await teacher.get(`/api/classes/${c.id}/stats`)).body.respondents, 0);
+  // Older saved work must not bypass the new policy through the retry endpoint.
+  const legacy = db.prepare("INSERT INTO submissions(quiz_id,student_id,answer,status) VALUES (?,?,?,'failed')")
+    .run(quiz, student.id, variants[0]);
+  await mutate(learner, 'post', `/submissions/${legacy.lastInsertRowid}/retry`);
+  assert.equal(modelCalls, 0);
+  assert.equal(db.prepare('SELECT score FROM submissions WHERE id=?').get(legacy.lastInsertRowid).score, null);
+  assert.equal((await mutate(teacher, 'patch', `/submissions/${legacy.lastInsertRowid}/review`, { score: 100, note: 'Try to award points.' })).status, 422);
+  const accepted = await mutate(learner, 'post', `/quizzes/${quiz}/submissions`, { answer: 'Cubic scaling cancels. I hate this problem.' });
+  assert.equal(accepted.status, 201); assert.equal(modelCalls, 1);
+});
+
+test('contradictory review flags and missing answer evidence cannot produce automatic points', async t => {
+  let result = { ...structuredClone(assessment), needs_review: false, review_reason: 'Reasoning is unclear.' };
+  const ai = { ...fakeAI, assess: async () => structuredClone(result) };
+  const { teacher, learner } = setup(t, ai);
+  await register(teacher, 'professor', 'professor@example.test'); await register(learner, 'student', 'student@example.test');
+  const c = await classroom(teacher); await joinClass(learner, c); const quiz = await question(teacher, c);
+  for (const next of [result, { ...assessment, evidence: [] }, { ...assessment, evidence: [{ quote: '', explanation: '' }] }]) {
+    result = next;
+    const response = await mutate(learner, 'post', `/quizzes/${quiz}/submissions`, { answer: 'Cubic scaling cancels.' });
+    assert.equal(response.status, 201); assert.equal(response.body.submission.status, 'review');
+    assert.equal(response.body.submission.score, null);
+  }
+  assert.equal((await learner.get(`/api/classes/${c.id}/leaderboard`)).body.leaderboard[0].points, 0);
+});

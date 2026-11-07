@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { rateLimit } from 'express-rate-limit';
+import { createHash } from 'node:crypto';
+import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { email, title, insist, requireLogin } from '../access.mjs';
 
@@ -19,9 +20,22 @@ function signIn(req, userId) {
 
 export function authRoutes(db) {
   const router = Router();
-  const attempts = rateLimit({ windowMs: 15 * 60 * 1000, limit: 40,
-    standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Too many attempts. Try again in 15 minutes.' } });
-  router.post('/register', attempts, async (req, res) => {
+  const limitOptions = {
+    windowMs: 15 * 60 * 1000, standardHeaders: 'draft-8', legacyHeaders: false,
+    message: { error: 'Too many attempts. Try again in 15 minutes.' },
+  };
+  // Separate generous network budgets allow a class to share campus Wi-Fi.
+  // Account-specific failed login limits still protect against password guessing.
+  const registrations = rateLimit({ ...limitOptions, limit: 500 });
+  const loginNetwork = rateLimit({ ...limitOptions, limit: 1000, skipSuccessfulRequests: true });
+  const loginAccount = rateLimit({
+    ...limitOptions, limit: 10, skipSuccessfulRequests: true,
+    keyGenerator: req => {
+      const accountKey = createHash('sha256').update(req.authInput.email).digest('hex');
+      return `${ipKeyGenerator(req.ip)}:${accountKey}`;
+    },
+  });
+  router.post('/register', registrations, async (req, res) => {
     const input = account.parse(req.body);
     insist(Buffer.byteLength(input.password) <= 72, 400, 'Password must fit within 72 UTF-8 bytes.');
     const hash = await bcrypt.hash(input.password, 12);
@@ -32,8 +46,11 @@ export function authRoutes(db) {
     await signIn(req, Number(result.lastInsertRowid));
     res.status(201).json({ user: { id: Number(result.lastInsertRowid), name: input.name, email: input.email, role: input.role } });
   });
-  router.post('/login', attempts, async (req, res) => {
-    const input = credentials.parse(req.body);
+  router.post('/login', loginNetwork, (req, _res, next) => {
+    req.authInput = credentials.parse(req.body);
+    next();
+  }, loginAccount, async (req, res) => {
+    const input = req.authInput;
     const user = db.prepare('SELECT * FROM users WHERE email=?').get(input.email);
     // Use a real hash even for unknown addresses to keep the expensive path comparable.
     const hash = user?.password_hash ?? '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxCO0WtQfUU4mSj49R8HcOSG7me';

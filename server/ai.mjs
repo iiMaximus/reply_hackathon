@@ -33,8 +33,13 @@ export function createAI({ apiKey = process.env.OPENAI_API_KEY, model = process.
     if (!response.output_parsed) throw new Error('The model did not return an assessment.');
     return schema.parse(response.output_parsed);
   }
+  return createClassroomAI({ configured: Boolean(client), model, respond });
+}
+
+/** Shared prompts and input preparation for production and local test providers. */
+export function createClassroomAI({ configured, model, respond }) {
   return {
-    configured: Boolean(client), model,
+    configured, model,
     async assess({ quiz, submission, resources, questionImage, answerImage, resourceImages }) {
       const content = [{ type: 'input_text', text: JSON.stringify({
         question: quiz.question, title: quiz.title, reference_answer: quiz.reference_answer,
