@@ -7,6 +7,8 @@ on:
     paths:
       - .github/workflows/live-classroom-check.yml
       - demo/quiz/live-check.mjs
+      - demo/quiz/limits-check.mjs
+      - demo/quiz/open.mjs
 
 permissions:
   contents: read
@@ -24,4 +26,6 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_KEY }}
           OPENAI_QUIZ_MODEL: ${{ vars.OPENAI_QUIZ_MODEL || 'gpt-6-luna' }}
-        run: node demo/quiz/live-check.mjs
+        run: |
+          node demo/quiz/live-check.mjs
+          node demo/quiz/limits-check.mjs
