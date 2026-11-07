@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { cloudClient } from "./agent.mjs";
-import { openClassroom } from "./open.mjs";
+import { extractWorksheetImage, openClassroom } from "./open.mjs";
 
 if (!process.env.OPENAI_API_KEY)
   throw Error(
@@ -12,7 +12,7 @@ let calls = 0;
 const cloud = cloudClient({
   enabled: true,
   fetcher: async (url, options) => {
-    if (url !== "https://api.openai.com/v1/responses" || ++calls > 4)
+    if (url !== "https://api.openai.com/v1/responses" || ++calls > 5)
       throw Error("Unexpected live-check request");
     const res = await fetch(url, options);
     if (!res.ok) {
@@ -76,3 +76,17 @@ console.log(
   "Verified open question, private response feedback and anonymous class report using",
   cloud.model,
 );
+
+const worksheet = await readFile(
+  new URL("./fixtures/three-questions.jpg", import.meta.url),
+);
+const questions = await extractWorksheetImage(
+  { file: { type: "image/jpeg", data: worksheet.toString("base64") } },
+  cloud,
+);
+assert.equal(questions.length, 3);
+assert.match(questions[0], /differentiat|derivative/i);
+assert.match(questions[1], /integrat|integral/i);
+assert.match(questions[2], /limit/i);
+assert.equal(calls, 5);
+console.log("One worksheet photo produced three separate exercises in order.");

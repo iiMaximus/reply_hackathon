@@ -47,10 +47,8 @@ let source = "",
   draftId = "",
   attach = false,
   asset = null,
-  upload = null,
-  page = 1,
-  exercises = [],
-  exercise = 0;
+  upload = null;
+let sheetImage = null;
 let worksheetRows = [],
   worksheetMode = "sequence";
 let studentEvent = "",
@@ -101,12 +99,10 @@ function progress(text, n = null) {
 }
 function fileReset() {
   worksheetRows = [];
+  sheetImage = null;
   upload?.dispose?.();
   upload = null;
   asset = null;
-  page = 1;
-  exercises = [];
-  exercise = 0;
   attach = false;
 }
 async function task(label, fn) {
@@ -154,27 +150,12 @@ function home(c) {
     <aside class="desk-library">${nextQuestion(c)}<section class="side-section"><h2>Course examples</h2>${c.examples.map((name, i) => btn("sample", name, false, `data-index="${i}"`)).join("")}</section>${reports(c)}</aside></div>`
   );
 }
-function uploadView() {
-  const opts = Array.from(
-    { length: upload.pages },
-    (_, i) =>
-      `<option value="${i + 1}" ${page === i + 1 ? "selected" : ""}>Page ${i + 1}</option>`,
-  ).join("");
-  return (
-    btn("back", "Back to questions") +
-    heading("Choose the question", upload.name) +
-    `<section class="panel"><div class="file-controls">${upload.pages > 1 ? `<label>Worksheet page <select id="open-page">${opts}</select></label>` : ""}
-    ${exercises.length > 1 ? `<label>Question <select id="open-exercise">${exercises.map((_, i) => `<option value="${i}" ${i === exercise ? "selected" : ""}>Question ${i + 1}</option>`).join("")}</select></label>` : ""}</div>
-    ${asset?.image ? `<details data-preserve="material"><summary>See original page</summary><img class="question-image" src="${h(asset.image)}" alt="Selected worksheet page"></details>` : ""}
-    ${field("open-source", "Text to use", source, 7, 5000)}<div class="actions">${btn("analyze", "Prepare this question", true, source.trim().length < 8 ? "disabled" : "")}</div></section>`
-  );
-}
 function worksheetView() {
   return (
     btn("back", "Back to questions") +
     heading("Plan your worksheet", upload?.name || "Pasted questions") +
-    `<section class="panel"><h2>Select questions</h2>${worksheetRows.map((row, i) => `<div class="worksheet-row"><label><input type="checkbox" data-select-row="${i}" ${row.selected ? "checked" : ""}> Question ${i + 1} · Page ${row.page}</label><textarea id="sheet-row-${i}" data-edit-row="${i}" aria-label="Question ${i + 1} wording" rows="2">${h(row.text)}</textarea></div>`).join("")}
-    <label for="worksheet-mode">How should students answer?</label><select id="worksheet-mode"><option value="sequence" ${worksheetMode === "sequence" ? "selected" : ""}>One question at a time</option><option value="together" ${worksheetMode === "together" ? "selected" : ""}>All together in one response</option></select>
+    `<section class="panel"><h2>Select questions</h2>${sheetImage ? `<details data-preserve="worksheet-image"><summary>View original image</summary><img class="question-image" src="${h(sheetImage)}" alt="Uploaded worksheet"></details>` : ""}${worksheetRows.map((row, i) => `<div class="worksheet-row"><label><input type="checkbox" data-select-row="${i}" ${row.selected ? "checked" : ""}> Question ${i + 1} · Page ${row.page}</label><textarea id="sheet-row-${i}" data-edit-row="${i}" aria-label="Question ${i + 1} wording" rows="2">${h(row.text)}</textarea></div>`).join("")}
+    ${btn("append-row", "Add another question")}<label for="worksheet-mode">How should students answer?</label><select id="worksheet-mode"><option value="sequence" ${worksheetMode === "sequence" ? "selected" : ""}>One question at a time</option><option value="together" ${worksheetMode === "together" ? "selected" : ""}>All together in one response</option></select>
     <div class="actions">${btn("prepare-set", "Preview selected questions", true)}</div></section>`
   );
 }
@@ -198,14 +179,8 @@ function preview(value) {
 function editor() {
   return (
     btn(
-      worksheetRows.length
-        ? "back-set"
-        : upload?.pages > 1
-          ? "pick-page"
-          : "back",
-      worksheetRows.length || upload?.pages > 1
-        ? "Back to worksheet"
-        : "Back to questions",
+      worksheetRows.length ? "back-set" : "back",
+      worksheetRows.length ? "Back to worksheet" : "Back to questions",
     ) +
     heading(
       "Review question",
@@ -285,7 +260,6 @@ function teacher(c) {
     if (r) return report(r);
   }
   if (screen === "worksheet" && worksheetRows.length) return worksheetView();
-  if (screen === "upload" && upload) return uploadView();
   if (screen === "edit" && c.draft) {
     if (draftId !== c.draft.id) {
       draft = structuredClone(c.draft);
@@ -507,79 +481,46 @@ async function analyze(data) {
   await post("host/open/analyze", data);
   screen = "edit";
 }
-async function readPage(n) {
-  page = n;
-  progress(
-    "Reading " + (upload.pages > 1 ? "worksheet page " + n : upload.name),
-  );
-  asset = await upload.page(n);
-  let text = asset.text;
-  if (!text && asset.image && (!state.classroom.cloud || upload.pages > 1)) {
-    const { recognize } = await import("/uploads.js");
-    text = await recognize(asset.image, progress);
-  }
-  exercises = splitText(text || "");
-  exercise = 0;
-  source = exercises[0] || "";
-  if (upload.pages > 1 || exercises.length > 1 || source.length > 3000) {
-    screen = "upload";
-    return;
-  }
-  if (asset.image && !source && state.classroom.cloud) {
+async function pageQuestions(material, reader) {
+  if (material.text?.trim()) return reader.splitQuestions(material.text);
+  if (!material.image) return [];
+  if (state.classroom.cloud) {
     try {
-      await analyze({
-        file: { type: "image/jpeg", data: asset.image.split(",")[1] },
+      const { questions } = await controls.api("host/open/extract", {
+        file: { type: "image/jpeg", data: material.image.split(",")[1] },
       });
-      return;
+      if (questions.length) return questions;
     } catch {
-      const { recognize } = await import("/uploads.js");
-      source = await recognize(asset.image, progress);
+      /* Printed text can still be read on the device. */
     }
   }
-  if (source.trim().length < 8) {
-    screen = "upload";
-    throw Error(
-      "Too little text was readable. Type the question or try a clearer photo.",
+  try {
+    return reader.splitQuestions(
+      await reader.recognize(material.image, progress),
     );
+  } catch {
+    return [];
   }
-  await analyze({ text: source });
 }
-let splitText;
 async function fileChosen(file) {
   if (!file) return;
   fileReset();
   source = "";
   screen = "home";
   const reader = await import("/uploads.js");
-  splitText = reader.splitQuestions;
   upload = await reader.openFile(file);
-  if (upload.pages > 1 || /\.(pdf|txt|md)$/i.test(file.name)) {
-    const items = [];
-    for (let i = 1; i <= upload.pages; i++) {
-      progress(`Reading page ${i} of ${upload.pages}`);
-      const material = await upload.page(i);
-      const text =
-        material.text ||
-        (material.image
-          ? await reader.recognize(material.image, progress)
-          : "");
-      const parts = reader.splitQuestions(text);
-      for (const part of parts.length ? parts : [""])
-        items.push({ page: i, text: part, selected: !!part });
+  const items = [];
+  for (let pageNumber = 1; pageNumber <= upload.pages; pageNumber++) {
+    progress(`Finding questions on page ${pageNumber} of ${upload.pages}`);
+    const material = await upload.page(pageNumber);
+    if (upload.pages === 1) sheetImage = material.image;
+    const questions = await pageQuestions(material, reader);
+    for (const text of questions.length ? questions : [""]) {
+      items.push({ page: pageNumber, text, selected: Boolean(text) });
     }
-    worksheetRows = items;
-    screen = "worksheet";
-    return;
   }
-  await readPage(1);
-  if (exercises.length > 1) {
-    worksheetRows = exercises.map((text) => ({
-      page: 1,
-      text,
-      selected: true,
-    }));
-    screen = "worksheet";
-  }
+  worksheetRows = items;
+  screen = "worksheet";
 }
 async function act(b) {
   const a = b.dataset.actionOpen,
@@ -588,6 +529,16 @@ async function act(b) {
   if (a === "dismiss-notice") {
     notification = "";
     controls.draw();
+    return;
+  }
+  if (a === "append-row") {
+    worksheetRows.push({
+      text: "",
+      page: worksheetRows.at(-1)?.page || 1,
+      selected: true,
+    });
+    controls.draw();
+    root.querySelector("#sheet-row-" + (worksheetRows.length - 1))?.focus();
     return;
   }
   if (a === "next-planned") {
@@ -701,7 +652,6 @@ async function act(b) {
     error = "";
     fileReset();
   }
-  if (a === "pick-page") screen = "upload";
   if (a === "back-set") screen = "worksheet";
   if (a === "resume") screen = "edit";
   if (a === "report") {
@@ -765,15 +715,6 @@ document.addEventListener("change", (e) => {
   if (el.id === "open-file" && el.files[0]) {
     const file = el.files[0];
     void task("Opening " + file.name, () => fileChosen(file));
-  }
-  if (el.id === "open-page") {
-    const n = Number(el.value);
-    void task("Reading worksheet page", () => readPage(n));
-  }
-  if (el.id === "open-exercise") {
-    exercise = Number(el.value);
-    source = exercises[exercise];
-    controls.draw();
   }
   if (el.id === "open-student-photo" && el.files[0]) {
     const file = el.files[0];

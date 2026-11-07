@@ -3,7 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { networkInterfaces } from "node:os";
 import { readFile, readdir } from "node:fs/promises";
 import QRCode from "qrcode";
-import { openClassroom } from "./quiz/open.mjs";
+import { openClassroom, extractWorksheetImage } from "./quiz/open.mjs";
 import { createTeachingRoom } from "./quiz/room.mjs";
 import { cloudClient } from "./quiz/agent.mjs";
 import { forecast } from "./analysis.mjs";
@@ -529,6 +529,10 @@ async function handle(req, res) {
     if (req.method !== "POST") fail(405, "Unsupported action.");
     if (openView && path.startsWith("/api/host/open/")) {
       const input = await body(req, 5700000);
+      if (path === "/api/host/open/extract")
+        return json(res, {
+          questions: await extractWorksheetImage(input, cloud),
+        });
       if (path === "/api/host/open/analyze") await classroom.analyze(input);
       else if (path === "/api/host/open/publish")
         await classroom.publish(input);
