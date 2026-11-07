@@ -1,0 +1,30 @@
+
+> solution-room@0.1.0 start
+> node --env-file-if-exists=.env server/index.mjs
+
+Classroom running at http://localhost:4173
+AI feedback: gpt-4.1-mini
+
+> solution-room@0.1.0 start
+> node --env-file-if-exists=.env server/index.mjs
+
+Classroom running at http://localhost:4173
+AI feedback: gpt-4.1-mini
+
+> solution-room@0.1.0 start
+> node --env-file-if-exists=.env server/index.mjs
+
+Classroom running at http://localhost:4173
+AI feedback: gpt-4.1-mini
+
+> solution-room@0.1.0 start
+> node --env-file-if-exists=.env server/index.mjs
+
+Classroom running at http://localhost:4173
+AI feedback: gpt-4.1-mini
+
+> solution-room@0.1.0 start
+> node --env-file-if-exists=.env server/index.mjs
+
+Classroom running at http://localhost:4173
+AI feedback: gpt-4.1-mini
