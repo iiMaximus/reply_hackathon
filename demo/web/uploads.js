@@ -101,6 +101,12 @@ export function splitQuestions(text) {
     .split(
       /\n\s*(?=(?:(?:exercise|question|problem|esercizio|domanda)\s+\d+\b|\d{1,2}[.)]\s+\S))/i,
     );
+  // A title or shared setup above a numbered list belongs to the exercises.
+  if (lines.length > 1 && !/^\s*(?:\d+[.)]|(?:exercise|question|problem|esercizio|domanda)\s+\d+)/i.test(lines[0]) &&
+      !/[?？]|^\s*(?:find|explain|evaluate|calculate|determine|compute|show|differentiate|integrate)\b/i.test(lines[0])) {
+    const intro=lines.shift().trim();
+    return lines.map(line=>intro+"\n"+line.trim()).filter(Boolean);
+  }
   const parts =
     lines.length > 1
       ? lines
