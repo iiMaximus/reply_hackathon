@@ -1,3 +1,4 @@
+import { createWhiteboard } from "./whiteboard.js";
 import { accuracy } from "./outcomes.js";
 import reportExample from "/sample-report.js";
 import {
@@ -6,6 +7,14 @@ import {
   classroomMarkdown as md,
 } from "/math.js";
 const actionIcons = {
+  class: "book-open",
+  standings: "trophy",
+  equation: "square-radical",
+  "draw-mode": "pen-line",
+  "write-mode": "keyboard",
+  "undo-ink": "undo-2",
+  "clear-ink": "eraser",
+  report: "list-checks",
   send: "send",
   publish: "radio",
   close: "chart-column",
@@ -32,7 +41,7 @@ const heading = (title, desc = "") =>
 // The same question carries the same visual marker on every device.
 function roundHeading(r) {
   const variant = [...r.id].reduce((sum, c) => sum + c.charCodeAt(0), 0) % 3;
-  return `<div class="round-heading mark-${variant}"><span class="round-tile" aria-hidden="true"><i></i></span><div><small>Class question</small><h1>${math(r.topic || "Open response")}</h1></div></div>`;
+  return `<div class="round-heading mark-${variant}"><span class="round-tile" aria-hidden="true"><i></i></span><div><h1>${math(r.topic || "Class question")}</h1></div></div>`;
 }
 let controls,
   root,
@@ -141,18 +150,18 @@ function reports(c) {
     ...(c.active?.status === "closed" ? [c.active] : []),
     ...c.history,
   ];
-  return `<section class="side-section"><h2>Class reports</h2>${rows.map((r) => btn("report", r.topic || r.prompt, false, `data-id="${h(r.id)}"`)).join("")}${btn("report", "View example report", false, 'data-id="example"')}</section>`;
+  return `<section class="side-section"><h2>${icon("list-checks")} Class reports</h2>${rows.map((r) => btn("report", r.topic || r.prompt, false, `data-id="${h(r.id)}"`)).join("")}${btn("report", "View example report", false, 'data-id="example"')}</section>`;
 }
 function home(c) {
   return (
     `<div class="desk-heading">${heading("Prepare a question", "Choose the exercise you want to discuss in class.")}<a class="project-link" href="/board" target="_blank" rel="noopener">${icon("presentation")} Open projector</a></div>` +
-    `<div class="columns"><section class="panel composer"><h2>Course material</h2><div class="upload-area" data-drop-material><span class="upload-symbol" aria-hidden="true">${icon("upload")}</span><strong>Drop your worksheet here</strong>
+    `<div class="columns"><section class="panel composer"><h2>Course material</h2><div class="upload-area" data-drop-material><strong>Drop your worksheet here</strong>
     ${picker("open-file", "Choose a photo or worksheet", ".jpg,.jpeg,.png,.webp,.pdf,.txt,.md")}
     <span class="muted">JPG, PNG, WebP, PDF or text · up to 16 MB</span></div>
     <div class="or"><span>or paste the question</span></div>
-    <label class="sr-only" for="open-source">Question text</label><textarea id="open-source" rows="4" maxlength="5000" placeholder="Paste one open question here.">${h(source)}</textarea><div class="actions">${btn("analyze", "Review question", true, source.trim().length < 8 ? "disabled" : "")}</div>
+    <label class="sr-only" for="open-source">Question text</label><textarea id="open-source" rows="4" maxlength="5000" placeholder="Paste a question or a numbered worksheet.">${h(source)}</textarea><div class="actions">${btn("analyze", "Review question", true, source.trim().length < 8 ? "disabled" : "")}</div>
     ${c.draft ? btn("resume", "Continue with saved draft") : ""}</section>
-    <aside class="desk-library">${nextQuestion(c)}<section class="side-section"><h2>Course examples</h2>${c.examples.map((name, i) => btn("sample", name, false, `data-index="${i}"`)).join("")}</section>${reports(c)}</aside></div>`
+    <aside class="desk-library">${nextQuestion(c)}<section class="side-section"><h2>${icon("book-open")} Course examples</h2>${c.examples.map((name, i) => btn("sample", name, false, `data-index="${i}"`)).join("")}</section>${reports(c)}</aside></div>`
   );
 }
 function worksheetView() {
@@ -160,7 +169,16 @@ function worksheetView() {
     btn("back", "Back to questions") +
     heading("Plan your worksheet", upload?.name || "Pasted questions") +
     `<section class="panel"><h2>Select questions</h2>${sheetImage ? `<details data-preserve="worksheet-image"><summary>View original image</summary><img class="question-image" src="${h(sheetImage)}" alt="Uploaded worksheet"></details>` : ""}${worksheetRows.map((row, i) => `<div class="worksheet-row"><label><input type="checkbox" data-select-row="${i}" ${row.selected ? "checked" : ""}> Question ${i + 1} · Page ${row.page}</label><textarea id="sheet-row-${i}" data-edit-row="${i}" aria-label="Question ${i + 1} wording" rows="2">${h(row.text)}</textarea></div>`).join("")}
-    ${btn("append-row", "Add another question")}<label for="worksheet-mode">How should students answer?</label><select id="worksheet-mode"><option value="sequence" ${worksheetMode === "sequence" ? "selected" : ""}>One question at a time</option><option value="together" ${worksheetMode === "together" ? "selected" : ""}>All together in one response</option></select>
+    ${btn("append-row", "Add another question")}
+    <fieldset class="delivery-options"><legend>How should students answer?</legend>${[
+      ["sequence", "One at a time", "Review each question separately."],
+      ["together", "Together", "One submission for the selected questions."],
+    ]
+      .map(
+        ([value, title, desc]) =>
+          `<label><input type="radio" name="worksheet-mode" value="${value}" ${worksheetMode === value ? "checked" : ""}><span><strong>${title}</strong><small>${desc}</small></span></label>`,
+      )
+      .join("")}</fieldset>
     <div class="actions">${btn("prepare-set", "Preview selected questions", true)}</div></section>`
   );
 }
@@ -317,11 +335,38 @@ function feedback(result) {
     return "<p>The agent is reading your response.</p><progress></progress>";
   return `${verdictBadge(result.verdict)}<p>${math(result.hint)}</p>${result.practice ? `<h3>${icon("target")} Practice next</h3><p>${math(result.practice)}</p>` : ""}`;
 }
+let responseMode = "write";
+let pad = null;
+function syncPadControls() {
+  const send = root?.querySelector('[data-action-open="send"]');
+  if (send)
+    send.disabled =
+      pending || !(responseMode === "draw" ? pad?.hasInk : answer.trim());
+  for (const b of root?.querySelectorAll(
+    '[data-action-open="undo-ink"],[data-action-open="clear-ink"]',
+  ) || [])
+    b.disabled = pending || !pad?.hasInk;
+}
+function responseComposer(c) {
+  const draw = responseMode === "draw";
+  const modes = `<div class="response-modes" role="group" aria-label="Answer format">${btn("write-mode", "Write", false, `aria-pressed="${!draw}"`)}${btn("draw-mode", "Whiteboard", false, `aria-pressed="${draw}"`)}</div>`;
+  const surface = draw
+    ? `<div class="pad-frame"><div class="pad-tools"><strong>Your whiteboard</strong><span>${btn("undo-ink", "Undo")}${btn("clear-ink", "Clear")}</span></div><div id="drawing-surface"></div></div>${field("open-answer", "Note with your drawing (optional)", answer, 2, 2000)}${!c.photoEnabled ? "<small>Local rehearsal saves drawings without AI image feedback.</small>" : ""}`
+    : field("open-answer", "Your response", answer, 4, 2000) +
+      `<div class="equation-tools">${btn("equation", "Insert equation")}<small>Write LaTeX between $ signs.</small></div><div id="answer-preview">${answerPreview(answer)}</div>`;
+  return (
+    modes +
+    surface +
+    `<div class="actions">${btn("send", draw ? "Submit drawing" : "Submit response", true, (draw ? pad?.hasInk : answer.trim()) ? "" : "disabled")}${!draw && c.photoEnabled ? picker("open-student-photo", "Submit a photo", "image/jpeg,image/png,image/webp") : ""}</div><p class="muted">Your feedback is private. Your professor sees class patterns.</p>`
+  );
+}
 function student(c) {
   const r = c.active,
     v = c.receipt;
   if (studentId !== (r?.id || "")) {
     studentId = r?.id || "";
+    responseMode = "write";
+    pad = null;
     answer = "";
     editing = false;
     tab = "class";
@@ -424,10 +469,7 @@ function student(c) {
     <details class="submitted-work" data-preserve="student-work"><summary>Your submitted work</summary><p class="written">${math(v.text)}</p>${v.photo ? `<img class="question-image" src="${h(v.photo)}" alt="Your submitted working">` : ""}</details>
     ${r.status === "open" && v.result ? btn("revise", "Revise response") : ""}`;
   } else if (r.status === "open") {
-    html +=
-      field("open-answer", "Your response", answer, 4, 2000) +
-      `<div class="equation-tools">${btn("equation", "Insert equation")}<small>Write LaTeX between $ signs.</small></div><div id="answer-preview">${answerPreview(answer)}</div>` +
-      `<div class="actions">${btn("send", "Submit response", true, answer.trim() ? "" : "disabled")}${c.photoEnabled ? picker("open-student-photo", "Submit a photo", "image/jpeg,image/png,image/webp") : ""}</div><p class="muted">Your professor sees class patterns. Your feedback is private.</p>`;
+    html += responseComposer(c);
   } else
     html +=
       "<p>This question is closed. Stay here for the next class question.</p>";
@@ -467,6 +509,13 @@ export function paintTeaching(el, next, view, actions) {
       : "") +
     loading() +
     `<p class="error" role="alert" ${error ? "" : "hidden"}>${h(error)}</p><p class="offline" role="status" hidden>Reconnecting to the classroom…</p>`;
+  const surface = root.querySelector("#drawing-surface");
+  if (surface) {
+    pad ??= createWhiteboard(syncPadControls);
+    surface.append(pad.canvas);
+    pad.canvas.style.pointerEvents = pending ? "none" : "";
+    syncPadControls();
+  }
   if (pending)
     root
       .querySelectorAll("button,input,select,textarea")
@@ -479,7 +528,7 @@ export function paintTeaching(el, next, view, actions) {
     }
   }
 }
-export const teachingBusy = () => !!pending;
+export const teachingBusy = () => !!pending || !!pad?.drawing;
 export async function updateActivity() {
   if (role !== "host" || !pending || !root) return;
   const before = pending;
@@ -654,6 +703,16 @@ async function act(b) {
       reportId = c.active.id;
       screen = "report";
     });
+  if (a === "draw-mode" || a === "write-mode") {
+    responseMode = a === "draw-mode" ? "draw" : "write";
+    controls.draw();
+    return;
+  }
+  if (a === "undo-ink" || a === "clear-ink") {
+    if (a === "undo-ink") pad?.undo();
+    else pad?.clear();
+    return;
+  }
   if (a === "equation") {
     const field = root.querySelector("#open-answer");
     const start = field.selectionStart,
@@ -671,7 +730,14 @@ async function act(b) {
   }
   if (a === "send")
     return task("Checking your response", async () => {
-      await post("open/answer", { id: studentId, text: answer });
+      const drawing = responseMode === "draw";
+      if (drawing && !pad?.hasInk)
+        throw Error("Draw a step before submitting.");
+      await post("open/answer", {
+        id: studentId,
+        text: answer,
+        ...(drawing ? { photo: pad.jpeg(), kind: "drawing" } : {}),
+      });
       editing = false;
     });
   if (a === "back") {
@@ -717,7 +783,7 @@ document.addEventListener("input", (e) => {
     worksheetRows[Number(el.dataset.editRow)].text = el.value;
   if (el.dataset.selectRow !== undefined)
     worksheetRows[Number(el.dataset.selectRow)].selected = el.checked;
-  if (el.id === "worksheet-mode") worksheetMode = el.value;
+  if (el.name === "worksheet-mode") worksheetMode = el.value;
   if (el.id === "open-alias") aliasInput = el.value;
   if (el.id === "open-source") {
     source = el.value;
@@ -726,8 +792,9 @@ document.addEventListener("input", (e) => {
   }
   if (el.id === "open-answer") {
     answer = el.value;
-    root.querySelector("#answer-preview").innerHTML = answerPreview(answer);
-    root.querySelector('[data-action-open="send"]').disabled = !answer.trim();
+    const previewBox = root.querySelector("#answer-preview");
+    if (previewBox) previewBox.innerHTML = answerPreview(answer);
+    syncPadControls();
   }
   if (el.id === "open-topic") draft.topic = el.value;
   if (el.id === "open-prompt") {

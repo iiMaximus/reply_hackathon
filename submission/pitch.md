@@ -16,7 +16,7 @@ Our next test is one real tutorial. We want to see whether that report changes w
 | --- | --- |
 | 0:00–0:35 | Open with the 42 example. Ask the audience what went wrong, then reveal that they need to see the working. |
 | 0:35–1:15 | Show the two lines of calculation on slide two. Identify the first-year student and the tutor who must decide what to teach while class is still in session. |
-| 1:15–2:40 | Switch from slide three to the private professor screen. Upload the demo worksheet, select question one, review its wording and open it. Project the QR. On a separate phone, submit “I substituted 2 and got −6 + 48 = 42.” Show the private feedback. |
+| 1:15–2:40 | Switch from slide three to the private professor screen. Upload the demo worksheet, select question one, review its wording and open it. Project the QR. On a separate phone, type “I substituted 2 and got −6 + 48 = 42,” or choose Whiteboard and draw the same line. Submit the response. Show the private feedback. |
 | 2:40–3:35 | Close the question and show the anonymous report. For a room with few participants, use **View example report** on the professor home screen. Say explicitly that the example contains six synthetic responses. |
 | 3:35–4:20 | Show how the agent checked the evidence and where it deferred. For an architecture question, show the bounded tool loop in the worked-step notebook. |
 | 4:20–4:50 | Describe the proposed pilot. Leave ten seconds for transitions. |

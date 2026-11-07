@@ -201,6 +201,12 @@ async function buildDraft(input, match, cloud, progress) {
   };
 }
 async function checkAnswer(q, text, match, cloud, image) {
+  if (image && !cloud.enabled)
+    return {
+      group: -1,
+      hint: "Your drawing was saved. Automatic image feedback is available in the live room.",
+      engine: "Local rehearsal",
+    };
   const unknown = {
     group: -1,
     hint: "There is too little evidence to identify a particular mistake.",
@@ -558,7 +564,7 @@ export function openClassroom({ match, cloud, changed = () => {} }) {
       reject("This question has changed.", 409);
     let image = null;
     if (input.photo) {
-      if (!cloud.enabled)
+      if (!cloud.enabled && input.kind !== "drawing")
         reject(
           "Live photo review is unavailable in this room. Submit your step as text.",
           503,

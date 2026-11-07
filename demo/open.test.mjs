@@ -205,3 +205,25 @@ test("accuracy excludes unassessed and legacy results and displays 3 of 4 as 75%
   );
   assert.equal(accuracy([]).percent, null);
 });
+
+test("local whiteboard submissions remain private and unassessed when vision is unavailable", async () => {
+  const room = openClassroom({ cloud: { enabled: false } });
+  await room.analyze({ sample: 0 });
+  await room.publish(room.host().draft);
+  const person = {},
+    input = {
+      id: room.board().id,
+      photo: "data:image/jpeg;base64,/9j/AA==",
+      text: "The factors cancel.",
+    };
+  await assert.rejects(
+    room.answer(person, input),
+    /photo review is unavailable/i,
+  );
+  await room.answer(person, { ...input, kind: "drawing" });
+  const receipt = room.student(person).receipt;
+  assert.equal(receipt.result.verdict, "unassessed");
+  assert.equal(room.host().active.summary.accuracy.assessed, 0);
+  assert.ok(room.workPhoto(person, receipt.photo.split("/").pop()));
+  assert.equal(room.student({}).receipt, null);
+});

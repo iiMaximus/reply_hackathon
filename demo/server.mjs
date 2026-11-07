@@ -113,6 +113,15 @@ if (simulated) await seedClass();
 const web = new URL("./web/", import.meta.url);
 const mathDist = new URL("../node_modules/katex/dist/", import.meta.url);
 const classroomIcons = [
+  "pen-line",
+  "keyboard",
+  "undo-2",
+  "eraser",
+  "trophy",
+  "book-open",
+  "square-radical",
+  "chevron-right",
+  "list-checks",
   "send",
   "radio",
   "chart-column",
@@ -128,6 +137,10 @@ const classroomIcons = [
   "presentation",
 ];
 const files = {
+  "/whiteboard.js": [
+    new URL("whiteboard.js", web),
+    "text/javascript; charset=utf-8",
+  ],
   "/outcomes.js": [
     new URL("outcomes.js", web),
     "text/javascript; charset=utf-8",

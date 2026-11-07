@@ -22,6 +22,10 @@ The browser uses plain JavaScript with server-sent events and polling for reconn
 
 [Open classroom implementation](quiz/open.mjs) · [Notebook orchestrator and tools](agent/orchestrator.mjs) · [Notebook system instructions](agent/instructions.md) · [Model adapters](agent/providers.mjs)
 
+## Student whiteboard
+
+Choose **Whiteboard** to sketch with a mouse, pen or finger. Undo removes one stroke. Students can switch to Write and return to their sketch during the same question. **Submit drawing** sends the board and optional note to the same private image-review path as a photo. Local rehearsal saves drawings as unassessed. QAI adapts the [drawing pad from Rick’s branch](https://github.com/iiMaximus/reply_hackathon/blob/82632e1/public/ui.mjs) for live classroom updates.
+
 ## Inspect the bounded agent
 
 Launch `npm run live` with a configured key and open the printed professor link to authenticate. Then use `/present?view=notebook` and `/join?view=notebook`. The live notebook defaults to `gpt-6.1-terra` and accepts an `OPENAI_MODEL` override. Try the Analisi I example with the proposed derivative f′(x) = 2 + x². The slope tool can compare the proposed and actual slopes at a test point. Ask for the finished answer or submit unreadable work to exercise the human handoff. `npm run demo` rehearses the tool sequence with a scripted planner.
