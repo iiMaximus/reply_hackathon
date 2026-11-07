@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { networkInterfaces } from "node:os";
 import { readFile } from "node:fs/promises";
 import QRCode from "qrcode";
+import { openClassroom } from "./quiz/open.mjs";
 import { createTeachingRoom } from "./quiz/room.mjs";
 import { cloudClient } from "./quiz/agent.mjs";
 import { forecast } from "./analysis.mjs";
@@ -33,14 +34,34 @@ if (liveClass && !simulated && !process.env.OPENAI_API_KEY) {
     "Live classroom needs OPENAI_API_KEY. For the offline simulation use npm run demo.",
   );
 }
-const teaching = createTeachingRoom({
-  match: strategyMatcher,
-  cloud: cloudClient({
-    enabled:
-      Boolean(process.env.OPENAI_API_KEY) &&
-      !process.argv.includes("--simulate"),
-  }),
+const cloud = cloudClient({
+  enabled:
+    Boolean(process.env.OPENAI_API_KEY) && !process.argv.includes("--simulate"),
 });
+const teaching = createTeachingRoom({ match: strategyMatcher, cloud });
+const streams = new Map();
+function notifyRoom() {
+  for (const response of streams.keys()) response.write("data: update\n\n");
+}
+const classroom = openClassroom({
+  match: strategyMatcher,
+  cloud,
+  changed: notifyRoom,
+});
+function openState(role, person) {
+  const base = { room, join, round, showcase: true };
+  if (role === "host")
+    return {
+      ...base,
+      classroom: {
+        ...classroom.host(),
+        connected: new Set([...streams.values()].filter(Boolean)).size,
+      },
+    };
+  if (role === "student")
+    return { ...base, classroom: classroom.student(person) };
+  return { ...base, classroom: { active: classroom.board() } };
+}
 const port = Number(
   pilot
     ? (process.env.POC_PORT ?? 4174)
@@ -108,20 +129,35 @@ const files = {
       [new URL("samples/" + id + ".png", web), "image/png"],
     ]),
   ),
-  "/sans.woff2": [
-    new URL(
-      "../node_modules/@fontsource-variable/dm-sans/files/dm-sans-latin-wght-normal.woff2",
-      import.meta.url,
-    ),
-    "font/woff2",
-  ],
-  "/serif.woff2": [
-    new URL(
-      "../node_modules/@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff2",
-      import.meta.url,
-    ),
-    "font/woff2",
-  ],
+  "/uploads.js": [new URL("uploads.js", web), "text/javascript; charset=utf-8"],
+  ...Object.fromEntries(
+    [
+      ["pdf.mjs", "pdfjs-dist/legacy/build/pdf.min.mjs"],
+      ["pdf.worker.mjs", "pdfjs-dist/legacy/build/pdf.worker.min.mjs"],
+      ["ocr.mjs", "tesseract.js/dist/tesseract.esm.min.js"],
+      ["worker.js", "tesseract.js/dist/worker.min.js"],
+      [
+        "tesseract-core-lstm.wasm.js",
+        "tesseract.js-core/tesseract-core-lstm.wasm.js",
+      ],
+      ...["eng", "ita"].map((lang) => [
+        lang + ".traineddata.gz",
+        "@tesseract.js-data/" +
+          lang +
+          "/4.0.0_best_int/" +
+          lang +
+          ".traineddata.gz",
+      ]),
+    ].map(([url, path]) => [
+      "/reader/" + url,
+      [
+        new URL("../node_modules/" + path, import.meta.url),
+        url.endsWith(".gz")
+          ? "application/octet-stream"
+          : "text/javascript; charset=utf-8",
+      ],
+    ]),
+  ),
 };
 
 function fail(status, message) {
@@ -307,7 +343,38 @@ function joinStudent(res) {
 async function handle(req, res) {
   const url = new URL(req.url, "http://localhost");
   const path = url.pathname;
+  const openView = showcase && url.searchParams.get("view") === "open";
   res.quizView = url.searchParams.get("view") === "quiz";
+  if (showcase && req.method === "GET" && path.startsWith("/api/open/image/")) {
+    const image = classroom.image(path.slice("/api/open/image/".length));
+    if (!image) fail(404, "Question image is unavailable.");
+    res.writeHead(200, {
+      "Content-Type": "image/jpeg",
+      "Cache-Control": "no-store",
+    });
+    return res.end(image);
+  }
+  if (showcase && path === "/api/open/events" && req.method === "GET") {
+    const participant =
+      url.searchParams.get("role") === "student"
+        ? people.get(cookie(req, "student"))
+        : null;
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-store",
+      "X-Accel-Buffering": "no",
+    });
+    res.write("retry: 2000\n\n");
+    streams.set(res, participant);
+    notifyRoom();
+    const timer = setInterval(() => res.write(": connected\n\n"), 20000);
+    res.on("close", () => {
+      clearInterval(timer);
+      streams.delete(res);
+      if (participant) notifyRoom();
+    });
+    return;
+  }
   if (path === "/health" && req.method === "GET")
     return json(res, { ok: true });
   if (
@@ -343,6 +410,7 @@ async function handle(req, res) {
       !(showcase && !url.searchParams.has("room"))
     )
       fail(404, "Open the projector link from the professor’s view.");
+    if (openView) return json(res, openState("board"));
     const count = participants().filter((p) => p.attempt).length;
     return json(res, {
       room,
@@ -389,8 +457,16 @@ async function handle(req, res) {
       return res.end(Buffer.from(data, "base64"));
     }
     if (path === "/api/host/state" && req.method === "GET")
-      return json(res, dashboard());
+      return json(res, openView ? openState("host") : dashboard());
     if (req.method !== "POST") fail(405, "Unsupported action.");
+    if (openView && path.startsWith("/api/host/open/")) {
+      const input = await body(req, 5700000);
+      if (path === "/api/host/open/analyze") await classroom.analyze(input);
+      else if (path === "/api/host/open/publish") classroom.publish(input);
+      else if (path === "/api/host/open/close") await classroom.close(input.id);
+      else fail(404, "Unknown action.");
+      return json(res, openState("host"));
+    }
     if (showcase && path.startsWith("/api/host/quiz/")) {
       const input = await body(req, 5700000);
       if (path === "/api/host/quiz/analyze") await teaching.analyze(input);
@@ -477,12 +553,13 @@ async function handle(req, res) {
   if (
     !p &&
     showcase &&
-    res.quizView &&
+    (res.quizView || openView) &&
     token &&
     /^[a-f0-9]{40}$/.test(token) &&
     (path === "/api/state" ||
       path === "/api/quiz/practice" ||
-      path === "/api/quiz/vote")
+      path === "/api/quiz/vote" ||
+      path === "/api/open/answer")
   ) {
     p = joinStudent(res);
   }
@@ -494,17 +571,21 @@ async function handle(req, res) {
         "Scan the room code on the projector or enter the six characters.",
       );
     p ??= joinStudent(res);
-    return json(res, studentView(p));
+    return json(res, openView ? openState("student", p) : studentView(p));
   }
   if (!p) fail(403, "Join the room first.");
   if (path === "/api/state" && req.method === "GET")
-    return json(res, studentView(p));
+    return json(res, openView ? openState("student", p) : studentView(p));
   if (req.method !== "POST") fail(405, "Unsupported action.");
   const input = await body(req);
   if (showcase && input.round !== undefined && input.round !== round)
     fail(409, "The tutor started a new round. Refresh and try again.");
   if (pilot && path !== "/api/attempt")
     fail(404, "This room is for sharing one step.");
+  if (openView && path === "/api/open/answer") {
+    await classroom.answer(p, input);
+    return json(res, openState("student", p));
+  }
   if (showcase && path === "/api/quiz/practice") {
     teaching.practiceVote(p, input);
     return json(res, studentView(p));

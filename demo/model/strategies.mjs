@@ -93,8 +93,11 @@ async function loadEncoder() {
     const vector = await encode(text);
     const scores = [];
     for (const [index, reference] of references.entries()) {
-      if (!conceptVectors.has(reference))
+      if (!conceptVectors.has(reference)) {
+        if (conceptVectors.size >= 128)
+          conceptVectors.delete(conceptVectors.keys().next().value);
         conceptVectors.set(reference, await encode(reference));
+      }
       const ref = conceptVectors.get(reference);
       scores.push({
         index,

@@ -6,445 +6,536 @@ const h = (value) =>
         c
       ],
   );
-const letter = (i) => String.fromCharCode(65 + i);
-const button = (id, text, primary = false, attrs = "") =>
-  `<button type="button" data-q="${id}" class="q-button ${primary ? "primary" : ""}" ${attrs}>${text}</button>`;
-const eyebrow = (text) => `<p class="q-overline">${h(text)}</p>`;
-const panelTitle = (text) => `<h2>${h(text)}</h2>`;
-const notebook = location.pathname + "?view=notebook";
-let screen = "",
-  source = "",
-  localDraft = null,
-  draftId = "",
-  reportId = "",
+const btn = (action, label, primary = false, extra = "") =>
+  `<button type="button" data-action-open="${action}" class="${primary ? "primary" : ""}" ${extra}>${h(label)}</button>`;
+const field = (id, label, value, rows = 3, max = 3000) =>
+  `<label class="field" for="${id}">${h(label)}</label><textarea id="${id}" rows="${rows}" maxlength="${max}">${h(value)}</textarea>`;
+const picker = (id, label, accept) =>
+  `<label class="file-button">${h(label)}<input id="${id}" type="file" accept="${accept}"></label>`;
+const status = (label) =>
+  `<div class="status-line"><span class="status-dot"></span>${h(label)}</div>`;
+const heading = (title, desc = "") =>
+  `<div class="heading"><h1>${h(title)}</h1>${desc ? `<p>${h(desc)}</p>` : ""}</div>`;
+let controls,
+  root,
+  role,
+  state,
+  screen = "",
   pending = "",
   error = "",
-  joinCopied = false;
-let editingDraft = false;
-let questionId = "",
-  answer = null,
-  reason = null,
-  stage = "choose",
-  studentTab = "class",
-  reviewIndex = null,
-  retry = null;
-let state, role, root, controls;
+  percent = null;
+let source = "",
+  draft = null,
+  draftId = "",
+  attach = false,
+  asset = null,
+  upload = null,
+  page = 1,
+  exercises = [],
+  exercise = 0;
+let studentId = "",
+  answer = "",
+  editing = false,
+  tab = "class",
+  reportId = "",
+  selectedReview = null;
 let saved = [];
 try {
-  const data = JSON.parse(localStorage.getItem("sr-quiz-progress-v1") || "[]");
+  const data = JSON.parse(localStorage.getItem("showwork-progress") || "[]");
   if (Array.isArray(data)) saved = data.slice(0, 40);
 } catch {}
-function remember(receipt) {
-  if (!receipt || saved.some((r) => r.id === receipt.id)) return;
-  saved = [receipt, ...saved].slice(0, 40);
-  try {
-    localStorage.setItem("sr-quiz-progress-v1", JSON.stringify(saved));
-  } catch {}
+const reportExample = {
+  id: "example",
+  topic: "Mechanics",
+  prompt:
+    "If a cantilever’s length and section height both double, what happens to tip deflection? Explain your reasoning.",
+  summary: {
+    total: 24,
+    reviewed: 24,
+    groups: [
+      {
+        label: "Used the cubic relationship for both length and height",
+        count: 11,
+      },
+      {
+        label: "Used a linear relationship between length and height",
+        count: 8,
+      },
+      { label: "Considered length alone", count: 3 },
+      { label: "Reasoning needs a closer look", count: 2 },
+    ],
+    move: "Double only the beam length. Ask students to compare the linear prediction with the cubic one.",
+  },
+};
+function loading() {
+  return `<div id="open-progress" class="loading" role="status" ${pending ? "" : "hidden"}><progress ${percent === null ? "" : `max="100" value="${percent}"`}></progress><span>${h(pending)}${percent === null ? "" : " · " + percent + "%"}</span></div>`;
 }
-function resetStudent(q) {
-  if (questionId === q?.id) return;
-  questionId = q?.id;
-  answer = null;
-  reason = null;
-  stage = "choose";
-  error = "";
-}
-function link(label, url, extra = "") {
-  return `<a class="q-link" href="${h(url)}" ${extra}>${h(label)}</a>`;
-}
-function shell(label, html, foot = "") {
-  document.body.classList.remove("workroom");
-  document.body.classList.add("q-body");
-  document.querySelector(".room-context").textContent = label;
-  root.className = "q-app";
-  root.innerHTML =
-    html +
-    `<div class="q-error" role="alert" ${error ? "" : "hidden"}>${h(error)}</div>` +
-    foot;
-}
-const topper = (small, title, summary = "") =>
-  `<div class="q-heading">${eyebrow(small)}<h1>${h(title)}</h1>${summary ? `<p>${h(summary)}</p>` : ""}</div>`;
-function teacherHome(t) {
-  const available = [
-    ...(t.active?.report ? [t.active.report] : []),
-    ...t.history,
-  ];
-  const list = available.length
-    ? `<div class="q-archive">${panelTitle("Past questions")}${available.map((r) => button("past", h(r.title || r.question.prompt) + " ↗", false, `data-id="${h(r.id)}"`)).join("")}</div>`
-    : "";
-  return (
-    topper(
-      "Teaching desk",
-      "Class questions",
-      "Start with one exercise from your course.",
-    ) +
-    `<div class="q-grid"><section class="q-panel q-prepare">${panelTitle("Add a question")}
-    <label class="q-field">Question text<textarea id="quiz-source" maxlength="5000" rows="4" placeholder="Paste an exercise, with answer choices if you have them.">${h(source)}</textarea></label>
-    <div class="q-toolbar">${button("analyze", pending === "analyze" ? "Reading question…" : "Review question →", true)}
-    <label class="q-upload">↑ Upload a file<input id="quiz-file" type="file" accept=".pdf,.txt,.md${t.cloud ? ",.png,.jpg,.jpeg,.webp" : ""}"></label></div>
-    <p class="q-small">PDF or plain text${t.cloud ? " · JPEG, PNG or WebP" : ""} · One exercise, up to 4 MB</p>
-    <div class="q-examples"><h3>Try a course example</h3>${t.examples.map((n, i) => button("sample", h(n) + " <span>↗</span>", false, `data-index="${i}"`)).join("")}</div>
-    ${t.draft ? button("resume", "Resume reviewed draft →") : ""}</section>
-    <aside class="q-aside">${eyebrow("Example class report")}<h2>When a correct answer hides a gap</h2>
-    <div class="q-mini"><b>15 <small>/ 24</small></b><span>chose the correct deflection</span><i style="--a:62.5%"></i></div>
-    <div class="q-mini"><b>9 <small>/ 24</small></b><span>also chose the cubic rule</span><i style="--a:37.5%"></i></div>
-    ${button("example-report", "Explore example report →")}
-    <p class="q-small">Illustrative responses from a mechanics tutorial.</p></aside></div>${list}`
-  );
-}
-function field(title, key, value, rows = 0, max = 300) {
-  return `<label class="q-field">${h(title)}${rows ? `<textarea data-field="${key}" rows="${rows}" maxlength="${max}">${h(value)}</textarea>` : `<input data-field="${key}" value="${h(value)}" maxlength="${max}">`}</label>`;
-}
-function editor(t) {
-  const d = localDraft;
-  const original = t.draft.sourceText
-    ? `<details class="q-details" data-preserve="source"><summary>Original question text</summary><p class="q-original">${h(t.draft.sourceText)}</p></details>`
-    : "";
-  if (
-    !editingDraft &&
-    d.key !== null &&
-    d.explanation &&
-    d.options.every((o) => o.text)
-  ) {
-    return `${button("home", "← Teaching desk")}${topper("Instructor review", "Review question", "Check the key, then open voting on every connected phone.")}
-    <div class="q-grid"><section class="q-panel"><p class="q-question">${h(d.prompt)}</p>
-    <ol class="q-static">${d.options.map((o, i) => `<li><i>${letter(i)}</i><span>${h(o.text)} ${d.key === i ? '<b class="q-correct">Correct</b>' : ""}</span></li>`).join("")}</ol>
-    <p>${h(d.explanation)}</p>${original}<div class="q-toolbar">${button("publish", pending ? "Opening…" : "Open for students →", true)}${button("edit-draft", "Edit question")}</div></section>
-    <aside class="q-aside">${eyebrow("Question analysis")}<h2>${h(d.topic || "Review notes")}</h2>
-    ${d.reasonKey === null ? "" : `<h3>Reasoning to listen for</h3><p>${h(d.options[d.reasonKey].reason)}</p><h3>Possible stumbling block</h3><p>${h(d.options.find((o, i) => i !== d.reasonKey)?.reason)}</p>`}
-    <small>${h(t.draft.engine)} · ${h(t.draft.note)}</small></aside></div>`;
-  }
-  const pick = (name, idx, key, label) =>
-    `<label class="q-tick"><input type="radio" name="${name}" data-key="${name}" value="${idx}" ${idx === key ? "checked" : ""}>${label}</label>`;
-  return `${button("home", "← Teaching desk")}${topper("Instructor review", "Review question", "Students will see it when you open voting.")}
-    <section class="q-panel q-editor"><div class="q-source-note"><b>${h(t.draft.engine)}</b><span>${h(t.draft.note)}</span></div>${original}
-    ${field("Question", "prompt", d.prompt, 3, 1600)}${field("Topic", "topic", d.topic, 0, 100)}
-    <h2>Answer choices</h2><div class="q-edit-options">${d.options.map((o, i) => `<div class="q-edit-choice"><b>${letter(i)}</b><div>${field("Answer " + letter(i), "text-" + i, o.text, 0, 240)}${pick("key", i, d.key, "Correct answer")}</div></div>`).join("")}</div>
-    <div class="q-inline">${d.options.length < 4 ? button("add-choice", "+ Add choice") : ""}${d.options.length > 2 ? button("remove-choice", "Remove last choice") : ""}</div>
-    ${field("Explanation students receive", "explanation", d.explanation, 2, 700)}
-    <details class="q-details" data-preserve="reason-editor"><summary>Reasoning choices and private feedback</summary><p>Students can pick a reason after choosing an answer. Select the sound reason, or leave every reason empty to skip this step.</p>
-    ${d.options.map((o, i) => `<div class="q-reason-editor">${field("Reason " + (i + 1), "reason-" + i, o.reason, 0, 300)}${pick("reasonKey", i, d.reasonKey, "Sound reason")}${field("Feedback for answer " + letter(i), "hint-" + i, o.hint, 0, 450)}</div>`).join("")}</details>
-    ${field("What to try on the board", "next", d.next, 2, 500)}
-    <div class="q-toolbar">${button("publish", pending ? "Opening…" : "Open for students →", true)}</div></section>`;
-}
-function teacherLive(a) {
-  return (
-    topper("Voting open", a.question.topic || "Class question") +
-    `<div class="q-grid"><section class="q-panel">${eyebrow("On students’ phones")}
-    <p class="q-question">${h(a.question.prompt)}</p>${optionList(a.question.options.map((o) => o.text))}
-    <div class="q-live-count"><strong>${a.total}</strong> ${a.total === 1 ? "answer" : "answers"} received</div>
-    ${button("close", a.status === "closing" || pending ? "Preparing report…" : "Close voting & see report", true)}</section>
-    ${invite(state.join)}</div>`
-  );
-}
-function optionList(opts) {
-  return `<ol class="q-static">${opts.map((o, i) => `<li><i>${letter(i)}</i>${h(o)}</li>`).join("")}</ol>`;
-}
-function invite(join) {
-  return `<aside class="q-aside q-invite"><h2>Join this question</h2><img src="/qr.png" alt="QR code to join this class">
-    ${link("Open projector ↗", "/board", 'target="_blank" rel="noopener"')}${join ? button("copy", joinCopied ? "Join link copied" : "Copy student link") : ""}<p class="q-small">Scan to join. No code or account.</p></aside>`;
-}
-function report(r) {
-  const q = r.question;
-  return `${button("back-report", "← Teaching desk")}${topper(r.example ? "Example report · illustrative data" : "Anonymous class report", r.title || "Class report")}
-    <p class="q-report-question">${h(q.prompt)}</p><div class="q-stats">
-    <div><b>${r.total}</b><span>responses</span></div><div><b>${r.correct}</b><span>correct answers</span></div>
-    ${q.reasonKey !== null ? `<div><b>${r.coherent}</b><span>correct with sound reason</span></div>` : ""}</div>
-    <div class="q-grid"><section class="q-panel"><h2>How the class answered</h2>
-    ${q.options.map((o, i) => `<div class="q-bar-row"><div><span>${letter(i)} · ${h(o.text)} ${i === q.key ? '<b class="q-correct">Correct</b>' : ""}</span><b>${r.counts[i]} <small>· ${r.total ? Math.round((100 * r.counts[i]) / r.total) : 0}%</small></b></div><i style="--a:${r.total ? (r.counts[i] * 100) / r.total : 0}%"></i></div>`).join("")}
-    ${q.reasonKey === null ? "" : `<details class="q-details" data-preserve="report-reasons"><summary>Reasons selected · ${r.explained} of ${r.total}</summary>${q.options.map((o, i) => `<p class="q-reason-stat"><span>${h(o.reason)} ${i === q.reasonKey ? "(sound reason)" : ""}</span><b>${r.reasons[i]}</b></p>`).join("")}</details>`}</section>
-    <aside class="q-aside"><h2>What to teach next</h2><p>${h(r.finding)}</p>
-    ${r.leadingReason ? `<p class="q-evidence">${r.leadingReason.count} selected this reason<br><strong>“${h(r.leadingReason.text)}”</strong></p>` : ""}
-    <h3>On the board</h3><p>${h(r.action)}</p><small>${h(r.engine)}</small></aside></div>
-    <div class="q-toolbar">${button("home", r.example ? "Prepare a question →" : "Prepare next question →", true)}</div>`;
-}
-function teach() {
-  const t = state.teaching;
-  if (t.draft && draftId !== t.draft.id) {
-    draftId = t.draft.id;
-    localDraft = structuredClone(t.draft.question);
-  }
-  const viewed =
-    reportId === "example"
-      ? t.sample
-      : [t.active?.report, ...t.history].find((r) => r?.id === reportId);
-  let html;
-  if (screen === "report" && viewed) html = report(viewed);
-  else if (screen === "edit" && t.draft) html = editor(t);
-  else if (t.active && t.active.status !== "closed")
-    html = teacherLive(t.active);
-  else if (t.active?.report && screen !== "home" && screen !== "edit")
-    html = report(t.active.report);
-  else html = teacherHome(t);
-  shell(
-    "Professor",
-    html,
-    `<footer class="q-footer">${link("Open the worked-step notebook ↗", notebook)}</footer>`,
-  );
-}
-function progress() {
-  const r = reviewIndex === null ? null : saved[reviewIndex];
-  if (r)
-    return `${button("all-progress", "← My progress")}${topper("Private review", r.topic || "Practice question")}
-    <div class="q-panel"><p class="q-question">${h(r.prompt)}</p>
-    ${
-      retry === null
-        ? `<p>Your first choice: <strong>${h(r.chosen)}</strong>. ${r.reason ? `Your reason: ${h(r.reason)}` : ""}</p>
-    ${r.reasonRight === false ? `<p>Revisit the reason: ${h(r.soundReason)}</p>` : ""}`
-        : ""
+function progress(text, n = null) {
+  pending = text;
+  percent = n;
+  const el = root?.querySelector("#open-progress");
+  if (el) {
+    el.hidden = false;
+    el.querySelector("span").textContent =
+      text + (n === null ? "" : " · " + n + "%");
+    const bar = el.querySelector("progress");
+    if (n === null) bar.removeAttribute("value");
+    else {
+      bar.max = 100;
+      bar.value = n;
     }
-    ${
-      retry === null
-        ? button("retry", "Try this question again", true)
-        : retry === -1
-          ? `<div class="q-picks">${r.choices.map((v, i) => button("retry-pick", h(v), false, `data-index="${i}"`)).join("")}</div>`
-          : `<h2>${r.choices[retry] === r.correct ? "Correct on this try" : "Look at the rule again"}</h2><p>${h(r.explanation)}</p>${button("retry", "Try again")}`
-    }</div>`;
-  return (
-    topper(
-      "For you",
-      "My progress",
-      "Your first answers stay on this browser. Practice again at your own pace.",
-    ) +
-    `<div class="q-stats"><div><b>${saved.length}</b><span>questions answered</span></div><div><b>${saved.filter((r) => r.right).length}</b><span>correct first answers</span></div><div><b>${saved.filter((r) => r.retryRight === true).length}</b><span>correct on review</span></div></div>
-    <section class="q-panel">${panelTitle("Your questions")}${saved.length ? saved.map((r, i) => button("review-saved", `<span>${h(r.topic || r.prompt)}</span><small>${r.retryRight ? "Reviewed" : r.reasonRight === false ? "Revisit reasoning" : r.right ? "Correct" : "Revisit answer"} →</small>`, false, `data-index="${i}"`)).join("") : "<p>Your first question will appear here after you answer.</p>"}</section>`
-  );
-}
-function picks(items, selected, id) {
-  return `<div class="q-picks" role="group" aria-label="${id === "answer" ? "Answer choices" : "Reasoning choices"}">${items.map(({ id: key, text }, i) => button(id, `<i>${id === "answer" ? letter(i) : i + 1}</i><span>${h(text)}</span>`, false, `data-index="${key}" aria-pressed="${key === selected}"`)).join("")}</div>`;
-}
-function student() {
-  const q = state.quiz || state.quizPractice;
-  resetStudent(q);
-  remember(state.quizPractice?.receipt);
-  remember(state.quiz?.receipt);
-  const nav = `<nav class="q-tabs" aria-label="Student view">${button("class", "Class", false, `aria-current="${studentTab === "class" ? "page" : "false"}"`)}${button("progress", "My progress", false, `aria-current="${studentTab === "progress" ? "page" : "false"}"`)}</nav>`;
-  let html;
-  if (studentTab === "progress") html = progress();
-  else {
-    const solo = q.status === "practice";
-    const label = solo
-      ? "Private practice · waiting for a class question"
-      : q.status === "open"
-        ? "Class question · voting open"
-        : "Class question · voting closed";
-    const r = q.receipt;
-    html =
-      topper(label, q.topic || "Your class question") +
-      `<section class="q-panel q-student"><p class="q-question">${h(q.prompt)}</p>`;
-    if (r) {
-      html += `<div class="q-receipt"><h2>${r.right ? "Correct answer" : "A step to revisit"}</h2><p>You chose <strong>${h(r.chosen)}</strong>.</p>
-      ${!r.right ? `<p>Correct choice: <strong>${h(r.correct)}</strong>.</p>` : ""}
-      ${r.hint && !r.right ? `<p>${h(r.hint)}</p>` : ""}<p>${h(r.explanation)}</p>
-      ${r.reasonRight !== null ? `<p><b>${r.reasonRight ? "Your reasoning fits." : "Check your reasoning."}</b> ${h(r.soundReason)}</p>` : ""}
-      ${button("progress", "View my progress →")}</div>`;
-    } else if (q.status === "closing" || q.status === "closed")
-      html +=
-        "<h2>Voting has ended</h2><p>The next question will appear here when your professor opens it.</p>";
-    else if (stage === "reason")
-      html += `<p class="q-chosen">Your answer · ${h(q.options[answer])}</p><h2>What led you there?</h2>${picks(q.reasonChoices, reason, "reason")}<div class="q-toolbar">${button("send", pending ? "Sending…" : reason === null ? "Send without a reason" : "Send my answer →", true)}${button("change", "Change answer")}</div>`;
-    else
-      html += `${picks(
-        q.options.map((text, id) => ({ id, text })),
-        answer,
-        "answer",
-      )}<div class="q-toolbar">${button("next", q.reasonChoices.length ? "Continue →" : "Send my answer →", true, answer === null ? "disabled" : "")}</div>`;
-    html += "</section>";
   }
-  shell(
-    "Student",
-    nav + html,
-    `<footer class="q-footer">${link("Open the worked-step notebook ↗", notebook)}</footer>`,
-  );
 }
-function board() {
-  const q = state.quiz;
-  const open = q?.status === "open";
-  const html =
-    topper(
-      "Class screen",
-      open ? q.topic || "Class question" : "Join the class",
-      open
-        ? ""
-        : q
-          ? "Voting has ended. The next question will appear here."
-          : "The question will appear here when voting opens.",
-    ) +
-    `<div class="q-grid"><section class="q-panel">${open ? `<p class="q-question">${h(q.prompt)}</p>${optionList(q.options)}<div class="q-live-count"><strong>${q.total}</strong> answers received</div>` : `<h2>On your phone</h2><p>Scan the QR code. Keep this page open on your phone to answer and receive private feedback.</p>`}</section>${invite(null).replace(/<a class="q-link"[^>]*>Open projector ↗<\/a>/, "")}</div>`;
-  shell("Projector", html);
+function fileReset() {
+  upload?.dispose?.();
+  upload = null;
+  asset = null;
+  page = 1;
+  exercises = [];
+  exercise = 0;
+  attach = false;
 }
-export function paintTeaching(app, next, view, actions) {
-  root = app;
-  state = next;
-  role = view;
-  controls = actions;
-  if (role === "host") teach();
-  else if (role === "board") board();
-  else student();
-  if (pending)
-    root
-      .querySelectorAll("button,input,textarea")
-      .forEach((el) => (el.disabled = true));
-}
-export const teachingBusy = () => Boolean(pending);
-async function mutate(action, path, data, done) {
+async function task(label, fn) {
   if (pending) return;
-  pending = action;
+  pending = label;
+  percent = null;
   error = "";
   controls.draw();
   try {
-    const next = await controls.api(path, data);
-    done?.();
-    controls.set(next);
+    await fn();
   } catch (e) {
-    error = e.message;
+    error = e.message || "This action could not finish. Please try again.";
   } finally {
     pending = "";
+    percent = null;
     controls.draw();
   }
 }
-function editInput(el) {
-  const field = el.dataset.field;
-  if (el.id === "quiz-source") {
-    source = el.value;
-    return;
+async function post(path, input) {
+  const next = await controls.api(path, input);
+  controls.set(next);
+  state = next;
+}
+function imageOf(r) {
+  return r?.image
+    ? `<img class="question-image" src="${h(r.image)}" alt="Question material shared by the professor">`
+    : "";
+}
+function reports(c) {
+  const rows = [
+    ...(c.active?.status === "closed" ? [c.active] : []),
+    ...c.history,
+  ];
+  return `<section class="side-section"><h2>Class reports</h2>${rows.map((r) => btn("report", r.topic || r.prompt, false, `data-id="${h(r.id)}"`)).join("")}${btn("report", "View example report", false, 'data-id="example"')}</section>`;
+}
+function home(c) {
+  return (
+    heading(
+      "Prepare a question",
+      "Use a question from your course. You can review it before students see it.",
+    ) +
+    `<div class="columns"><section class="panel"><h2>Upload a question</h2><div class="upload-area">
+    ${picker("open-file", "Choose a photo or worksheet", ".jpg,.jpeg,.png,.webp,.pdf,.txt,.md")}
+    <span class="muted">JPG, PNG, WebP, PDF or text · up to 16 MB</span></div>
+    <div class="or"><span>or paste the question</span></div>
+    <label class="sr-only" for="open-source">Question text</label><textarea id="open-source" rows="4" maxlength="5000" placeholder="Paste one open question here.">${h(source)}</textarea><div class="actions">${btn("analyze", "Review question", true, source.trim().length < 8 ? "disabled" : "")}</div>
+    ${c.draft ? btn("resume", "Continue with saved draft") : ""}</section>
+    <aside><section class="side-section"><h2>Course examples</h2>${c.examples.map((name, i) => btn("sample", name, false, `data-index="${i}"`)).join("")}</section>${reports(c)}</aside></div>`
+  );
+}
+function uploadView() {
+  const opts = Array.from(
+    { length: upload.pages },
+    (_, i) =>
+      `<option value="${i + 1}" ${page === i + 1 ? "selected" : ""}>Page ${i + 1}</option>`,
+  ).join("");
+  return (
+    btn("back", "Back to questions") +
+    heading("Choose the question", upload.name) +
+    `<section class="panel"><div class="file-controls">${upload.pages > 1 ? `<label>Worksheet page <select id="open-page">${opts}</select></label>` : ""}
+    ${exercises.length > 1 ? `<label>Question <select id="open-exercise">${exercises.map((_, i) => `<option value="${i}" ${i === exercise ? "selected" : ""}>Question ${i + 1}</option>`).join("")}</select></label>` : ""}</div>
+    ${asset?.image ? `<details data-preserve="material"><summary>See original page</summary><img class="question-image" src="${h(asset.image)}" alt="Selected worksheet page"></details>` : ""}
+    ${field("open-source", "Text to use", source, 7, 5000)}<div class="actions">${btn("analyze", "Prepare this question", true, source.trim().length < 8 ? "disabled" : "")}</div></section>`
+  );
+}
+function editor() {
+  return (
+    btn(
+      upload?.pages > 1 ? "pick-page" : "back",
+      upload?.pages > 1 ? "Back to worksheet" : "Back to questions",
+    ) +
+    heading(
+      "Review question",
+      "Only the question and any image you select will be shared.",
+    ) +
+    `<section class="panel editor">${field("open-prompt", "Question students will see", draft.prompt, 4)}
+    ${asset?.image ? `<details data-preserve="attachment"><summary>Original image</summary><img class="question-image" src="${h(asset.image)}" alt="Uploaded page"></details><label class="check"><input type="checkbox" id="open-attach" ${attach ? "checked" : ""}> Also show this image to students</label>` : ""}
+    <label class="field" for="open-topic">Topic</label><input id="open-topic" maxlength="100" placeholder="Optional" value="${h(draft.topic)}">
+    ${field("open-ref", "Private reference answer", draft.reference, 3, 1000)}
+    <p class="muted">Add a reference for content feedback. Without one, the agent looks for how students approached the question.</p>
+    ${draft.patterns.length > 1 ? `<details data-preserve="patterns"><summary>What the agent will look for</summary>${draft.patterns.map((p) => `<p>${h(p.anchor)}</p>`).join("")}</details>` : ""}
+    <div class="actions">${btn("publish", "Open for students", true)}<span class="muted">${h(draft.engine)}</span></div></section>`
+  );
+}
+function invite(projector = false) {
+  return `<aside class="invite"><h2>Scan to join</h2><img src="/qr.png" alt="QR code for the student room"><p>No account or room code needed.</p>
+  ${projector ? "" : `<a href="/board" target="_blank" rel="noopener">Open projector</a> ${btn("copy", "Copy student link")}`}</aside>`;
+}
+function stats(s) {
+  return `<dl class="stats"><div><dt>Responses</dt><dd>${s.total}</dd></div><div><dt>Reviewed</dt><dd>${s.reviewed}</dd></div><div><dt>Being checked</dt><dd>${s.total - s.reviewed}</dd></div></dl>`;
+}
+function breakdown(s) {
+  const groups = s.groups.filter((g) => g.count);
+  return groups.length
+    ? `<ul class="distribution">${groups
+        .sort((a, b) => b.count - a.count)
+        .map(
+          (g) =>
+            `<li><div><span>${h(g.label)}</span><strong>${g.count}</strong></div><progress aria-label="${h(g.label)}" max="${s.reviewed}" value="${g.count}"></progress></li>`,
+        )
+        .join("")}</ul>`
+    : '<p class="muted">Reasoning patterns appear as responses are reviewed.</p>';
+}
+function live(c) {
+  const r = c.active,
+    s = r.summary;
+  return (
+    heading(r.topic || "Class question") +
+    status(
+      r.status === "closing"
+        ? "Finishing the class report"
+        : "Open for responses",
+    ) +
+    `<div class="columns"><section class="panel"><p class="question">${h(r.prompt)}</p>${imageOf(r)}${stats(s)}
+    <h2>Live reasoning patterns</h2>${breakdown(s)}<div class="actions">${btn("close", "Close and view report", true, r.status === "closing" ? "disabled" : "")}<span class="muted">${c.connected} student device${c.connected === 1 ? "" : "s"} connected</span></div></section>${invite()}</div>`
+  );
+}
+function report(r) {
+  return (
+    btn("back", "Back to questions") +
+    heading(
+      "Class report",
+      r.id === "example"
+        ? "Example data from a mechanics tutorial."
+        : "Anonymous responses to the class question.",
+    ) +
+    `<section class="panel"><p class="question">${h(r.prompt)}</p>${stats(r.summary)}<div class="report-grid"><section><h2>Reasoning patterns</h2>${breakdown(r.summary)}</section>
+    <section><h2>What to teach next</h2><p>${h(r.summary.move || "There are no responses to interpret.")}</p>${r.summary.engine ? `<small>${h(r.summary.engine)}</small>` : ""}</section></div></section><div class="actions">${btn("back", "Prepare another question", true)}</div>`
+  );
+}
+function teacher(c) {
+  if (c.active && c.active.status !== "closed") return live(c);
+  if (screen === "report") {
+    const r =
+      reportId === "example"
+        ? reportExample
+        : [c.active, ...c.history].find((r) => r?.id === reportId);
+    if (r) return report(r);
   }
-  if (!localDraft) return;
-  if (el.dataset.key) {
-    localDraft[el.dataset.key] = Number(el.value);
-    return;
+  if (screen === "upload" && upload) return uploadView();
+  if (screen === "edit" && c.draft) {
+    if (draftId !== c.draft.id) {
+      draft = structuredClone(c.draft);
+      draftId = draft.id;
+    }
+    return editor();
   }
-  if (!field) return;
-  const [key, index] = field.split("-");
-  if (index === undefined) localDraft[key] = el.value;
-  else localDraft.options[Number(index)][key] = el.value;
+  if (!screen && c.active?.status === "closed") return report(c.active);
+  return home(c);
+}
+function remember(r, v) {
+  if (!r || !v?.result) return;
+  const row = {
+    id: r.id,
+    prompt: r.prompt,
+    topic: r.topic,
+    text: v.text,
+    hint: v.result.hint,
+  };
+  if (saved.find((x) => x.id === r.id)?.text === row.text) return;
+  saved = [row, ...saved.filter((x) => x.id !== r.id)].slice(0, 40);
+  try {
+    localStorage.setItem("showwork-progress", JSON.stringify(saved));
+  } catch {}
+}
+function student(c) {
+  const r = c.active,
+    v = c.receipt;
+  if (studentId !== (r?.id || "")) {
+    studentId = r?.id || "";
+    answer = "";
+    editing = false;
+    tab = "class";
+  }
+  remember(r, v);
+  const nav = `<nav aria-label="Student views">${btn("class", "Class question", false, `aria-current="${tab === "class" ? "page" : "false"}"`)}${btn("progress", "My work", false, `aria-current="${tab === "progress" ? "page" : "false"}"`)}</nav>`;
+  if (tab === "progress") {
+    const item = saved.find((x) => x.id === selectedReview);
+    return (
+      nav +
+      heading("My work", "Your responses are saved on this browser.") +
+      `<section class="panel">${
+        item
+          ? `${btn("progress", "All responses")}<p class="question">${h(item.prompt)}</p><h2>Your response</h2><p class="written">${h(item.text)}</p><h2>Feedback</h2><p>${h(item.hint)}</p>`
+          : saved.length
+            ? saved
+                .map((x) =>
+                  btn("history", x.prompt, false, `data-id="${h(x.id)}"`),
+                )
+                .join("")
+            : "<p>Your submitted work will appear here.</p>"
+      }</section>`
+    );
+  }
+  if (!r)
+    return (
+      nav +
+      heading("Class question") +
+      `<section class="panel waiting">${status("Waiting for the professor")}<p>The question will appear here when your professor opens it.</p></section>`
+    );
+  let html =
+    nav +
+    heading(r.topic || "Class question") +
+    status(
+      r.status === "open" ? "Open for responses" : "Closed for responses",
+    ) +
+    `<section class="panel"><p class="question">${h(r.prompt)}</p>${imageOf(r)}`;
+  if (v && (!editing || r.status !== "open")) {
+    html += `<h2>Your response</h2><p class="written">${h(v.text)}</p><div class="feedback"><h2>Private feedback</h2><p>${h(v.result?.hint || "The agent is reading your response.")}</p>
+    ${v.result ? `<small>${h(v.result.engine)}</small>` : "<progress></progress>"}</div>
+    ${r.status === "open" && v.result ? btn("revise", "Revise response") : ""}`;
+  } else if (r.status === "open") {
+    html +=
+      field("open-answer", "Your response", answer, 4, 2000) +
+      `<div class="actions">${btn("send", "Submit response", true, answer.trim() ? "" : "disabled")}${picker("open-student-photo", "Read text from a photo", "image/jpeg,image/png,image/webp")}</div><p class="muted">Your professor sees class patterns. Your feedback is private.</p>`;
+  } else
+    html +=
+      "<p>This question is closed. Stay here for the next class question.</p>";
+  return html + "</section>";
+}
+function board(c) {
+  const r = c.active,
+    open = r?.status === "open";
+  return `<div class="board-layout"><section>${heading(open ? r.topic || "Class question" : "Join the class")}
+    ${open ? `<p class="question">${h(r.prompt)}</p>${imageOf(r)}<p>${r.total} response${r.total === 1 ? "" : "s"} received</p>` : `<p>${r ? "Responses are closed." : "Waiting for the professor to open a question."}</p>`}</section>${invite(true)}</div>`;
+}
+export function paintTeaching(el, next, view, actions) {
+  root = el;
+  state = next;
+  role = view;
+  controls = actions;
+  const c = state.classroom,
+    focus = root.contains(document.activeElement)
+      ? document.activeElement
+      : null;
+  const pos =
+    focus?.tagName === "TEXTAREA" ||
+    (focus?.tagName === "INPUT" && focus.type === "text")
+      ? [focus.selectionStart, focus.selectionEnd]
+      : null;
+  document.body.className = "open-room";
+  document.querySelector(".room-context").textContent = {
+    host: "Professor",
+    student: "Student",
+    board: "Projector",
+  }[role];
+  root.className = "room-" + role;
+  root.innerHTML =
+    (role === "host" ? teacher(c) : role === "board" ? board(c) : student(c)) +
+    loading() +
+    `<p class="error" role="alert" ${error ? "" : "hidden"}>${h(error)}</p><p class="offline" role="status" hidden>Reconnecting to the classroom…</p>`;
+  if (pending)
+    root
+      .querySelectorAll("button,input,select,textarea")
+      .forEach((x) => (x.disabled = true));
+  else if (focus?.id) {
+    const input = document.getElementById(focus.id);
+    if (input) {
+      input.focus({ preventScroll: true });
+      if (pos && input.setSelectionRange) input.setSelectionRange(...pos);
+    }
+  }
+}
+export const teachingBusy = () => !!pending;
+export async function updateActivity() {
+  if (role !== "host" || !pending || !root) return;
+  const before = pending;
+  try {
+    const next = await controls.api("host/state");
+    if (pending === before && next.classroom?.job) progress(next.classroom.job);
+  } catch {}
 }
 async function analyze(data) {
-  await mutate("analyze", "host/quiz/analyze", data, () => {
-    screen = "edit";
-    editingDraft = false;
-  });
+  progress("Preparing the question and private feedback");
+  await post("host/open/analyze", data);
+  screen = "edit";
 }
-async function upload(file) {
-  if (!file) return;
-  if (file.size > 4 * 1024 * 1024) {
-    error = "Choose a file smaller than 4 MB.";
-    controls.draw();
+async function readPage(n) {
+  page = n;
+  progress(
+    "Reading " + (upload.pages > 1 ? "worksheet page " + n : upload.name),
+  );
+  asset = await upload.page(n);
+  let text = asset.text;
+  if (!text && asset.image && (!state.classroom.cloud || upload.pages > 1)) {
+    const { recognize } = await import("/uploads.js");
+    text = await recognize(asset.image, progress);
+  }
+  exercises = splitText(text || "");
+  exercise = 0;
+  source = exercises[0] || "";
+  if (upload.pages > 1 || exercises.length > 1 || source.length > 3000) {
+    screen = "upload";
     return;
   }
-  try {
-    if (/\.(?:md|txt)$/i.test(file.name)) {
-      source = await file.text();
-      await analyze({ text: source });
+  if (asset.image && !source && state.classroom.cloud) {
+    try {
+      await analyze({
+        file: { type: "image/jpeg", data: asset.image.split(",")[1] },
+      });
       return;
+    } catch {
+      const { recognize } = await import("/uploads.js");
+      source = await recognize(asset.image, progress);
     }
-    const data = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(",")[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-    const type =
-      file.type || (/\.pdf$/i.test(file.name) ? "application/pdf" : "");
-    await analyze({ file: { type, data } });
-  } catch {
-    error =
-      "The file could not be opened. Paste its text or choose another file.";
-    controls.draw();
   }
-}
-async function action(btn) {
-  const id = btn.dataset.q,
-    i = Number(btn.dataset.index),
-    t = state.teaching;
-  error = "";
-  if (id === "analyze") return analyze({ text: source });
-  if (id === "sample") return analyze({ sample: i });
-  if (id === "publish")
-    return mutate(
-      "publish",
-      "host/quiz/publish",
-      { id: draftId, question: localDraft },
-      () => {
-        screen = "";
-        source = "";
-      },
+  if (source.trim().length < 8) {
+    screen = "upload";
+    throw Error(
+      "Too little text was readable. Type the question or try a clearer photo.",
     );
-  if (id === "close")
-    return mutate("close", "host/quiz/close", { id: t.active.id }, () => {
+  }
+  await analyze({ text: source });
+}
+let splitText;
+async function fileChosen(file) {
+  if (!file) return;
+  fileReset();
+  source = "";
+  screen = "home";
+  const reader = await import("/uploads.js");
+  splitText = reader.splitQuestions;
+  upload = await reader.openFile(file);
+  await readPage(1);
+}
+async function act(b) {
+  const a = b.dataset.actionOpen,
+    c = state.classroom;
+  error = "";
+  if (a === "analyze")
+    return task("Preparing question", () => analyze({ text: source }));
+  if (a === "sample") {
+    fileReset();
+    return task("Reading course example", () =>
+      analyze({ sample: Number(b.dataset.index) }),
+    );
+  }
+  if (a === "publish")
+    return task("Opening the question", async () => {
+      await post("host/open/publish", {
+        id: draftId,
+        prompt: draft.prompt,
+        topic: draft.topic,
+        reference: draft.reference,
+        image: attach ? asset?.image : null,
+      });
+      screen = "";
+      source = "";
+      fileReset();
+    });
+  if (a === "close")
+    return task("Preparing the class report", async () => {
+      await post("host/open/close", { id: c.active.id });
       screen = "";
     });
-  if (id === "copy") {
+  if (a === "send")
+    return task("Checking your response", async () => {
+      await post("open/answer", { id: studentId, text: answer });
+      editing = false;
+    });
+  if (a === "back") {
+    screen = "home";
+    error = "";
+    fileReset();
+  }
+  if (a === "pick-page") screen = "upload";
+  if (a === "resume") screen = "edit";
+  if (a === "report") {
+    reportId = b.dataset.id;
+    screen = "report";
+  }
+  if (a === "revise") {
+    answer = c.receipt.text;
+    editing = true;
+  }
+  if (a === "class") tab = "class";
+  if (a === "progress") {
+    tab = "progress";
+    selectedReview = null;
+  }
+  if (a === "history") selectedReview = b.dataset.id;
+  if (a === "copy") {
     try {
       await navigator.clipboard.writeText(state.join);
-      joinCopied = true;
+      b.textContent = "Copied";
+      return;
     } catch {
       error = "Student link: " + state.join;
     }
   }
-  if (id === "home" || id === "back-report") {
-    screen = "home";
-    reportId = "";
-  }
-  if (id === "resume") screen = "edit";
-  if (id === "edit-draft") editingDraft = true;
-  if (id === "add-choice")
-    localDraft.options.push({ text: "", reason: "", hint: "" });
-  if (id === "remove-choice") {
-    localDraft.options.pop();
-    for (const k of ["key", "reasonKey"])
-      if (localDraft[k] >= localDraft.options.length) localDraft[k] = null;
-  }
-  if (id === "example-report" || id === "past") {
-    screen = "report";
-    reportId = id === "past" ? btn.dataset.id : "example";
-  }
-  if (id === "progress" || id === "all-progress") {
-    studentTab = "progress";
-    reviewIndex = null;
-    retry = null;
-  }
-  if (id === "class") studentTab = "class";
-  if (id === "review-saved") {
-    reviewIndex = i;
-    retry = null;
-  }
-  if (id === "retry") retry = -1;
-  if (id === "retry-pick") {
-    retry = i;
-    const entry = saved[reviewIndex];
-    entry.retryRight = entry.choices[i] === entry.correct;
-    try {
-      localStorage.setItem("sr-quiz-progress-v1", JSON.stringify(saved));
-    } catch {}
-  }
-  if (id === "answer") answer = i;
-  if (id === "reason") reason = reason === i ? null : i;
-  if (id === "change") stage = "choose";
-  if (id === "next" || id === "send") {
-    const q = state.quiz || state.quizPractice;
-    if (q.id !== questionId || answer === null) return;
-    if (id === "next" && q.reasonChoices.length) stage = "reason";
-    else
-      return mutate(
-        "send",
-        q.status === "practice" ? "quiz/practice" : "quiz/vote",
-        { id: q.id, answer, reason },
-      );
-  }
   controls.draw();
-  if (id === "answer" || id === "reason")
-    root
-      .querySelector(`[data-q="${id}"][data-index="${i}"]`)
-      ?.focus({ preventScroll: true });
 }
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-action-open]");
+  if (root?.contains(b) && !pending) void act(b);
+});
 document.addEventListener("input", (e) => {
-  if (root?.contains(e.target)) editInput(e.target);
+  const el = e.target;
+  if (!root?.contains(el)) return;
+  if (el.id === "open-source") {
+    source = el.value;
+    const b = root.querySelector('[data-action-open="analyze"]');
+    if (b) b.disabled = source.trim().length < 8;
+  }
+  if (el.id === "open-answer") {
+    answer = el.value;
+    root.querySelector('[data-action-open="send"]').disabled = !answer.trim();
+  }
+  if (el.id === "open-topic") draft.topic = el.value;
+  if (el.id === "open-prompt") draft.prompt = el.value;
+  if (el.id === "open-ref") draft.reference = el.value;
+  if (el.id === "open-attach") attach = el.checked;
 });
 document.addEventListener("change", (e) => {
-  if (e.target.id === "quiz-file") void upload(e.target.files[0]);
-});
-document.addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-q]");
-  if (btn && root?.contains(btn) && !pending) void action(btn);
+  const el = e.target;
+  if (!root?.contains(el) || pending) return;
+  if (el.id === "open-file" && el.files[0]) {
+    const file = el.files[0];
+    void task("Opening " + file.name, () => fileChosen(file));
+  }
+  if (el.id === "open-page") {
+    const n = Number(el.value);
+    void task("Reading worksheet page", () => readPage(n));
+  }
+  if (el.id === "open-exercise") {
+    exercise = Number(el.value);
+    source = exercises[exercise];
+    controls.draw();
+  }
+  if (el.id === "open-student-photo" && el.files[0]) {
+    const file = el.files[0];
+    void task("Reading photo", async () => {
+      const reader = await import("/uploads.js");
+      const doc = await reader.openFile(file);
+      try {
+        const page = await doc.page(1);
+        const txt = page.text || (await reader.recognize(page.image, progress));
+        if (!txt.trim())
+          throw Error("The photo was unclear. Type your step or try again.");
+        answer = (answer + "\n" + txt).trim().slice(0, 2000);
+      } finally {
+        await doc.dispose?.();
+      }
+    });
+  }
 });

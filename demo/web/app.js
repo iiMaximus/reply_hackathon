@@ -1,5 +1,5 @@
 import { lensPanel, paintProbe, selectX, agentRecord } from "/lens.js";
-import { paintTeaching, teachingBusy } from "/teaching.js";
+import { paintTeaching, teachingBusy, updateActivity } from "/teaching.js";
 const notebookView =
   new URLSearchParams(location.search).get("view") === "notebook";
 const app = document.querySelector("#app");
@@ -42,7 +42,7 @@ async function api(path, data) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         };
-  if (!notebookView) path += (path.includes("?") ? "&" : "?") + "view=quiz";
+  if (!notebookView) path += (path.includes("?") ? "&" : "?") + "view=open";
   const response = await fetch("/api/" + path, options);
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || "Try again.");
@@ -170,7 +170,7 @@ function roomHeader(section, room) {
 
 function exerciseCard() {
   return `<section class="lesson-strip" aria-labelledby="exercise-title">
-    <div><p class="folio-kicker">${esc(state.lesson.course)} &nbsp; / &nbsp; EXERCISE SHEET</p>
+    <div><p class="folio-kicker">${esc(state.lesson.course)} &nbsp; / &nbsp; Exercise</p>
     <h1 id="exercise-title">${esc(state.lesson.title)}</h1><p>${esc(state.lesson.prompt.split("?")[0])}?</p></div>
     <div class="lesson-formula">${writtenFormula(state.lesson.formula)}</div></section>`;
 }
@@ -199,7 +199,7 @@ function studentComposer() {
       <form data-form="notebook"><button class="send-action">Send sample step ↗</button></form></section>`;
   }
   if (entryMode === "choose" && state.showcase) {
-    return `<section class="margin-entry"><div class="folio-kicker">YOUR NOTEBOOK</div><h2>Try the next line.</h2><p class="entry-intro">Give the classroom agent a step to check. If you propose a derivative, it can test your slope against the curve.</p>
+    return `<section class="margin-entry"><h2>Your working</h2><p class="entry-intro">Give the classroom agent a step to check. If you propose a derivative, it can test your slope against the curve.</p>
       <form data-form="attempt"><label class="compose-field"><span class="sr-only">Your mathematical step</span>
       <textarea id="step" maxlength="1500" placeholder="f′(x) = …" rows="2">${esc(draft)}</textarea></label>
       <div class="entry-actions"><button class="send-action" ${draft.trim() ? "" : "disabled"}>Check my step ↗</button>
@@ -250,7 +250,7 @@ function sentCard() {
             : review.group === "kept"
               ? "Both roots are accounted for."
               : "From slope to stationary points.";
-  return `<section class="agent-note sent-card" role="status"><div class="folio-kicker"><span class="agent-lamp"></span> CLASSROOM AGENT <span class="note-engine">${state.engine === "local" ? "MiniLM + course tools" : state.live ? "OpenAI + course tools" : "Scripted rehearsal"}</span></div>
+  return `<section class="agent-note sent-card" role="status"><div class="folio-kicker"><span class="agent-lamp"></span> Agent feedback <span class="note-engine">${state.engine === "local" ? "MiniLM + course tools" : state.live ? "OpenAI + course tools" : "Scripted rehearsal"}</span></div>
     <h2 tabindex="-1">${title}</h2>
     ${lastSentPhoto || review.notebook ? `<img class="receipt-photo" src="${lastSentPhoto || "/samples/" + esc(review.notebook) + ".png"}" alt="Notebook page submitted">` : ""}
     <div class="marked-line"><small>Your line</small><blockquote>${esc(review.line || "Photo submitted")}</blockquote></div>
@@ -777,6 +777,8 @@ async function refresh() {
           ? "host/state"
           : "state",
     );
+    const offline = document.querySelector(".offline");
+    if (offline) offline.hidden = true;
     const status = document.querySelector("[data-connection]");
     if (status) status.textContent = "Room open";
     if (
@@ -803,6 +805,11 @@ async function refresh() {
       tell("A fresh round is open.");
       return;
     }
+    if (next.classroom && !notebookView) {
+      state = next;
+      render();
+      return;
+    }
     // Avoid destroying in-progress answers, keyboard focus or expanded study notes on a poll.
     if (
       document.activeElement?.matches("textarea,input,select") ||
@@ -816,6 +823,8 @@ async function refresh() {
   } catch {
     const status = document.querySelector("[data-connection]");
     if (status) status.textContent = "Reconnecting…";
+    const offline = document.querySelector(".offline");
+    if (offline) offline.hidden = false;
   }
 }
 try {
@@ -860,4 +869,15 @@ try {
   }
 }
 window.addEventListener("resize", () => paintProbe(state?.attempt));
+if (state?.classroom && !notebookView && "EventSource" in window) {
+  const events = new EventSource(
+    "/api/open/events?role=" +
+      (host ? "host" : projection ? "board" : "student"),
+  );
+  events.onmessage = () =>
+    teachingBusy() ? void updateActivity() : void refresh();
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) void refresh();
+  });
+}
 setInterval(refresh, 1500);

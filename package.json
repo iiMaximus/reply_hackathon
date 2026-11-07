@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --env-file-if-exists=.env demo/server.mjs",
+    "start": "npm run model:prepare && npm run classroom",
     "poc": "node --env-file-if-exists=.env demo/server.mjs --poc",
     "demo": "node demo/server.mjs --simulate",
     "live": "node --env-file-if-exists=.env demo/server.mjs --live",
@@ -17,11 +17,13 @@
     "node": ">=22.9"
   },
   "dependencies": {
-    "@fontsource-variable/dm-sans": "^5.2.0",
-    "@fontsource/instrument-serif": "^5.2.0",
     "@huggingface/tokenizers": "0.2.0",
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/ita": "1.0.0",
     "onnxruntime-web": "1.22.0",
+    "pdfjs-dist": "6.4.299",
     "qrcode": "^1.5.4",
+    "tesseract.js": "7.0.0",
     "unpdf": "1.9.1"
   }
 }

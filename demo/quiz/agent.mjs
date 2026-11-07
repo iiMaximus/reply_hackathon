@@ -201,7 +201,7 @@ export function cloudClient({
   return {
     enabled,
     model,
-    async ask(task, instructions, content) {
+    async ask(task, instructions, content, { schema, limit } = {}) {
       const today = new Date().toISOString().slice(0, 10);
       if (today !== day) {
         day = today;
@@ -222,13 +222,14 @@ export function cloudClient({
           instructions,
           input: [{ role: "user", content }],
           reasoning: { effort: "none" },
-          max_output_tokens: task === "question" ? 1400 : 256,
+          max_output_tokens: limit ?? (task === "question" ? 1400 : 256),
           text: {
             format: {
               type: "json_schema",
               name: task,
               strict: true,
-              schema: task === "question" ? answerShape : reportShape,
+              schema:
+                schema ?? (task === "question" ? answerShape : reportShape),
             },
           },
         }),
