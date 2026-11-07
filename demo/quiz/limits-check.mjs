@@ -65,6 +65,7 @@ if (process.env.GITHUB_STEP_SUMMARY)
   await appendFile(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
 for (const r of results) {
   assert.equal(r.engine, cloud.model);
+  assert.equal(r.verdict, r.expected === "correct" ? "correct" : r.expected === "unclear" ? "unassessed" : "incorrect");
   if (r.expected === "correct") assert.equal(r.group, 0, r.label);
   else if (r.expected === "unclear") assert.equal(r.group, -1, r.label);
   else {
@@ -76,5 +77,6 @@ assert.equal(report.reviewed, cases.length);
 assert.ok(report.evidence.length >= 2);
 assert.ok(report.boardExample && report.check && report.expected);
 assert.equal(report.unclear, 1);
+assert.deepEqual(report.accuracy, {correct:2, assessed:5, percent:40});
 assert.equal(report.engine, cloud.model);
 assert.ok(hasConstant(report.practiceTopic + " " + report.move), report.move);

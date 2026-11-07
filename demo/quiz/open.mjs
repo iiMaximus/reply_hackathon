@@ -1,3 +1,4 @@
+import { accuracy } from "../web/outcomes.js";
 import { randomUUID } from "node:crypto";
 import { examples, interventions } from "./course.mjs";
 import { readSource, reject } from "./agent.mjs";
@@ -318,6 +319,7 @@ function summary(q, votes) {
       .filter((g, i) => g.count && (i !== 0 || !q.patterns.length))
       .sort((a, b) => b.count - a.count)[0] || groups.find((g) => g.count);
   return {
+    accuracy: accuracy([...votes.values()].map((v) => v.result)),
     total: votes.size,
     reviewed,
     groups,
@@ -418,12 +420,19 @@ export function openClassroom({ match, cloud, changed = () => {} }) {
           reject(
             "Shorten the selection to 3,000 characters or present it one by one.",
           );
-        q.prompt = input.text.split(/^\s*(?:reference answer|model answer|solution|soluzione|explanation)\s*:\s*/im)[0].trim();
-        if (typeof input.reference === "string" && q.reference !== input.reference) {
-          q.reference = clean(input.reference,1000);
+        q.prompt = input.text
+          .split(
+            /^\s*(?:reference answer|model answer|solution|soluzione|explanation)\s*:\s*/im,
+          )[0]
+          .trim();
+        if (
+          typeof input.reference === "string" &&
+          q.reference !== input.reference
+        ) {
+          q.reference = clean(input.reference, 1000);
           q.patterns = [];
         }
-        if (input.topic) q.topic = clean(input.topic,100);
+        if (input.topic) q.topic = clean(input.topic, 100);
       }
       draft = { ...q, remaining, id: randomUUID() };
     } finally {
@@ -578,6 +587,12 @@ export function openClassroom({ match, cloud, changed = () => {} }) {
       .then((result) => {
         v.result = {
           ...result,
+          verdict:
+            !round.q.reference || result.group < 0
+              ? "unassessed"
+              : result.group === 0
+                ? "correct"
+                : "incorrect",
           label: round.q.patterns[result.group]?.label || ambiguous.label,
         };
         note("review_answer", result.engine);

@@ -4,6 +4,7 @@ export default {
   topic: "Synthetic class · Polynomial limits",
   summary: {
     total: 6,
+    accuracy: { correct: 2, assessed: 5, percent: 40 },
     reviewed: 6,
     groups: [
       {

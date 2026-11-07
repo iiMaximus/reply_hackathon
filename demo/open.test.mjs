@@ -187,3 +187,21 @@ test("an approved worksheet keeps the next question private until it is publishe
   assert.equal(room.board().prompt, next);
   assert.equal(room.host().history[0].prompt, text);
 });
+
+test("accuracy excludes unassessed and legacy results and displays 3 of 4 as 75%", async () => {
+  const { accuracy } = await import("./web/outcomes.js");
+  assert.deepEqual(
+    accuracy(
+      [
+        "correct",
+        "correct",
+        "incorrect",
+        "unassessed",
+        undefined,
+        "correct",
+      ].map((verdict) => ({ verdict })),
+    ),
+    { correct: 3, assessed: 4, percent: 75 },
+  );
+  assert.equal(accuracy([]).percent, null);
+});

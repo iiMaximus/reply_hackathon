@@ -1,3 +1,4 @@
+import { accuracy } from "./outcomes.js";
 import reportExample from "/sample-report.js";
 import {
   escapeHTML as h,
@@ -259,7 +260,7 @@ function report(r) {
         ? "Six synthetic responses with a sample teaching exercise."
         : "Anonymous responses to the class question.",
     ) +
-    `<section class="panel"><div class="question rich">${md(r.prompt)}</div>${stats(r.summary)}<div class="report-grid"><section><h2>Reasoning patterns</h2>${breakdown(r.summary)}
+    `<section class="panel"><div class="question rich">${md(r.prompt)}</div>${stats(r.summary)}${accuracyLine(r.summary.accuracy, "Class accuracy")}<div class="report-grid"><section><h2>Reasoning patterns</h2>${breakdown(r.summary)}
     ${r.summary.evidence?.length ? `<h3>Observed mistakes</h3><ul>${r.summary.evidence.map((entry) => `<li>${math(entry.error)} <strong>(${entry.count})</strong></li>`).join("")}</ul>` : ""}
     ${r.summary.unclear ? `<p>${r.summary.unclear} response(s) had too little evidence to diagnose.</p>` : ""}</section>
     <section><h2>${icon("presentation")} What to teach next</h2>${r.summary.practiceTopic ? `<h3 class="focus-topic">${icon("target")} ${math(r.summary.practiceTopic)}</h3>` : ""}<p>${math(r.summary.move || "There are no responses to interpret.")}</p>${r.summary.boardExample ? `<h3>Show on the board</h3><div class="rich">${md(r.summary.boardExample)}</div>` : ""}
@@ -295,6 +296,7 @@ function remember(r, v) {
     topic: r.topic,
     text: v.text || (v.photo ? "Photo of your working" : ""),
     hint: v.result.hint,
+    verdict: v.result.verdict,
     practice: v.result.practice,
   };
   if (JSON.stringify(saved.find((x) => x.id === r.id)) === JSON.stringify(row))
@@ -304,10 +306,24 @@ function remember(r, v) {
     localStorage.setItem("showwork-progress", JSON.stringify(saved));
   } catch {}
 }
+function accuracyLine(value, label) {
+  if (value?.percent == null) return "";
+  return `<div class="accuracy-line"><span>${h(label)}</span><strong>${value.percent}% correct</strong><small>${value.correct} of ${value.assessed} assessed</small></div>`;
+}
+function verdictBadge(verdict) {
+  const labels = {
+    correct: "Correct",
+    incorrect: "Incorrect",
+    unassessed: "Not assessed",
+  };
+  return labels[verdict]
+    ? `<span class="answer-verdict ${verdict}">${labels[verdict]}</span>`
+    : "";
+}
 function feedback(result) {
   if (!result)
     return "<p>The agent is reading your response.</p><progress></progress>";
-  return `<p>${math(result.hint)}</p>${result.practice ? `<h3>${icon("target")} Practice next</h3><p>${math(result.practice)}</p>` : ""}`;
+  return `${verdictBadge(result.verdict)}<p>${math(result.hint)}</p>${result.practice ? `<h3>${icon("target")} Practice next</h3><p>${math(result.practice)}</p>` : ""}`;
 }
 function student(c) {
   const r = c.active,
@@ -384,6 +400,7 @@ function student(c) {
     return (
       nav +
       heading("My work", "Your responses are saved on this browser.") +
+      accuracyLine(accuracy(saved), "Your saved questions") +
       `<section class="panel">${
         item
           ? `${btn("progress", "All responses")}<div class="question rich">${md(item.prompt)}</div><h2>Your response</h2><p class="written">${math(item.text)}</p><h2>Feedback</h2>${feedback(item)}`
@@ -411,7 +428,7 @@ function student(c) {
     ) +
     `<section class="panel"><div class="question rich">${md(r.prompt)}</div>${imageOf(r)}`;
   if (v && (!editing || r.status !== "open")) {
-    html += `<div class="sent-badge">${icon("circle-check")} Response submitted</div><h2>Your response</h2><p class="written">${math(v.text)}</p>${v.photo ? `<img class="question-image" src="${h(v.photo)}" alt="Your submitted working">` : ""}<div class="feedback"><h2>Private feedback</h2>${feedback(v.result)}
+    html += `<div class="sent-badge">${icon("circle-check")} Response submitted</div><h2>Your response</h2><p class="written">${math(v.text)}</p>${v.photo ? `<img class="question-image" src="${h(v.photo)}" alt="Your submitted working">` : ""}<div class="feedback"><h2>Private feedback</h2>${feedback(v.result)}${v.result ? accuracyLine(accuracy(saved), "Your saved questions") : ""}
     ${v.result ? `<small>${h(v.result.engine)}</small>` : ""}</div>
     ${r.status === "open" && v.result ? btn("revise", "Revise response") : ""}`;
   } else if (r.status === "open") {

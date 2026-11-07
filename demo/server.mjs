@@ -127,7 +127,14 @@ const classroomIcons = [
   "presentation",
 ];
 const files = {
-  "/sample-report.js": [new URL("sample-report.js", web),"text/javascript; charset=utf-8"],
+  "/outcomes.js": [
+    new URL("outcomes.js", web),
+    "text/javascript; charset=utf-8",
+  ],
+  "/sample-report.js": [
+    new URL("sample-report.js", web),
+    "text/javascript; charset=utf-8",
+  ],
   "/markdown.js": [
     new URL(
       "../node_modules/markdown-it/dist/browser/markdown-it.umd.min.js",

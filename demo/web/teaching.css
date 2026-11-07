@@ -732,3 +732,8 @@ body.open-room {
   }
 }
 .class-notice button { flex: none; white-space: nowrap; }
+.answer-verdict { display:inline-block; margin:0 0 8px; padding:3px 10px; border-radius:12px; font-weight:650; background:#eef1f5; }
+.answer-verdict.correct { color:#205d46; background:#e4f4ed; }
+.answer-verdict.incorrect { color:#8d342b; background:#ffede6; }
+.accuracy-line { display:flex; align-items:baseline; flex-wrap:wrap; gap:.4em .8em; padding:12px 0; color:var(--muted); }
+.accuracy-line strong { color:var(--ink); }
