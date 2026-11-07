@@ -4,6 +4,8 @@ Reply Student Tech Clash 2026 · AI on Campus
 
 ## Solution Room
 
+**[Play the simulated classroom](demo/README.md#play-the-simulated-classroom).** Run `npm run demo` or [deploy the simulation on Render](https://render.com/deploy?repo=https://github.com/iiMaximus/reply_hackathon). Students scan straight into the exercise. Try a prepared notebook, see the tutor’s feedback, play the follow-up and compare scores. The simulation is labeled throughout; the model-backed version runs separately with `npm run live`.
+
 **[Try the one-exercise proof of concept first](demo/README.md#start-with-the-proof-of-concept).** Run `npm run poc`. Students send an unfinished step from their phones and a tutor decides what to explain from the incoming work. The guide includes a five-minute classroom test and a criterion for trying a second session.
 
 **[Run the phone demo, see the architecture and rehearse the pitch](demo/README.md)**. The repository now includes a working student room, a professor dashboard and an offline rehearsal path. Before anyone submits, the professor can request likely mistakes and example steps to watch for. The live counts come only from submitted work.

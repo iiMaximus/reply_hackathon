@@ -1,5 +1,20 @@
 # Run the Solution Room demo
 
+## Play the simulated classroom
+
+Run `npm ci` and `npm run demo`. Open the private presenter link printed in the terminal. Put **Project exercise** on the classroom display. The QR opens `/join` directly. Students can scan from a phone or open the student link on a second device without typing a code or creating an account.
+
+1. Click **Preview likely mistakes** while the room is empty. These are prepared hypotheses. For a solo rehearsal, **Load example class** adds three explicitly labeled classmates.
+2. On a phone, tap **Try a sample notebook**, choose **Divide by x** and send the page. Inspect its scripted reading and private hint. Revising with **Factor first** changes the group without adding another participant. Visitors can also type or upload their own step. The simulation uses simple rules for text and leaves unfamiliar photos for the tutor to review.
+3. The tutor checks the anonymous steps and opens the recommended challenge. A division error selects a new equation where canceling the variable loses a root. With a class that kept both roots, the alternative changes the factors. The released question stays fixed as more submissions arrive.
+4. A student chooses an answer and a reason, earns at most one point, and can use an alias in **Standings** or open **Study**. Prepared scores carry an example label. The tutor sees audience results separately and can **Start a fresh round** to replay with the same QR.
+
+This mode never calls a model, even if a key is configured. `npm run live` runs the same classroom with the server-side model for forecasting and submission analysis; it requires `OPENAI_API_KEY`. Live mode has no scripted notebook or seeded classmates. In both modes the server groups actual submissions and selects an approved follow-up. For the challenge, rehearse the live agent separately with real handwriting.
+
+### Put the simulation on Render
+
+Use [Deploy the demo on Render](https://render.com/deploy?repo=https://github.com/iiMaximus/reply_hackathon). The repository’s blueprint starts one free Node web service with `npm run demo`. After the deploy completes, open the private **Professor** link from the service logs. Share the public service’s `/join` or project its `/board`; the QR uses Render’s service URL. The free service may take time to wake up, so open it before presenting. Room state is in memory and clears on a process restart; the student URL stays the same. [Render deployment button](https://render.com/docs/deploy-to-render) · [Render environment variables](https://render.com/docs/environment-variables) · [Free service behavior](https://render.com/docs/free)
+
 The first customer to approach is the teaching assistant who leads a first-year engineering **Analisi I esercitazione at PoliTO**, works through an exercise sheet on the board and has to decide which algebra step deserves class time. The first student is the first-year engineering student already copying that solution into a notebook or tablet, who has a partial line but would hesitate to raise a hand. The course coordinator is the person to approach about a second group after a TA asks to run it again. These are pilot hypotheses.
 
 ## Start with the proof of concept

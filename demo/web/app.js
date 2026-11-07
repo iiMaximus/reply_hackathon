@@ -53,7 +53,7 @@ function board() {
   const rows = state.board
     .map(
       (p) =>
-        `<div class="spread boardrow"><span>${esc(p.alias)}</span><strong>1 pt · joint lead</strong></div>`,
+        `<div class="spread boardrow"><span>${esc(p.alias)}${p.example ? " · example" : ""}</span><strong>1 pt · joint lead</strong></div>`,
     )
     .join("");
   return (
@@ -142,6 +142,8 @@ let showPhotoNote = false;
 let pilotError = "";
 let expandedGroup = null;
 let lastSentPhoto = "";
+let selectedNotebook = "divide";
+let confirmRestart = false;
 
 function icon(name) {
   return `<i aria-hidden="true" class="ui-icon icon-${name}"></i>`;
@@ -158,7 +160,7 @@ function writtenFormula(formula) {
 function roomHeader(section, room) {
   document.body.classList.add("workroom");
   document.querySelector(".room-context").innerHTML =
-    `<span class="context-name">${esc(section)}</span>${room ? `<span class="room-number">Room ${esc(room)}</span>` : ""}`;
+    `<span class="context-name">${esc(section)}</span>${state?.showcase ? `<span class="demo-label">${state.simulated ? "Simulated demo" : "Live AI"}</span>` : room ? `<span class="room-number">Room ${esc(room)}</span>` : ""}`;
 }
 
 function exerciseCard() {
@@ -218,6 +220,21 @@ function picker(id, text, name, camera = false) {
 }
 
 function studentComposer() {
+  if (entryMode === "sample" && state.simulated) {
+    return `<section class="composer"><button class="back-action" data-pilot="choose">← Input options</button>
+      <h2>Try a sample notebook</h2><p>Choose a prepared page to see its scripted reading and private hint.</p>
+      <div class="notebook-picks">${[
+        ["divide", "Divide by x"],
+        ["factor", "Factor first"],
+      ]
+        .map(
+          ([id, label]) =>
+            `<button data-notebook="${id}" aria-pressed="${selectedNotebook === id}">${label}</button>`,
+        )
+        .join("")}</div>
+      <img class="work-preview" src="/samples/${selectedNotebook}.png" alt="Sample notebook: ${selectedNotebook === "factor" ? "factor the derivative" : "divide by x"}">
+      <form data-form="notebook"><button class="send-action">Send sample step ↗</button></form></section>`;
+  }
   if (entryMode === "choose") {
     const cameraFirst = window.matchMedia("(pointer: coarse)").matches;
     const primary = cameraFirst
@@ -226,6 +243,7 @@ function studentComposer() {
     return `<section class="composer"><h2>Share your next step</h2><p>One unfinished line is enough.</p>
       ${primary}
       <div class="other-methods">${picker("photo", "Upload a photo", "image")}${cameraFirst ? `<button data-pilot="type" class="picker-link">${icon("pen")} Type a step</button>` : ""}</div>
+      ${state.simulated ? '<button class="sample-link" data-pilot="sample">Try a sample notebook →</button>' : ""}
       <div class="privacy-note">${icon("lock")} Only your tutor sees your work.${state.live ? " AI helps read it." : ""}</div>
       ${editing ? '<button class="back-action" data-pilot="cancel">Keep my submitted step</button>' : ""}
       ${pilotError ? `<p class="field-error" role="alert">${esc(pilotError)}</p>` : ""}</section>`;
@@ -248,7 +266,7 @@ function studentComposer() {
       <div class="math-keys" aria-label="Math symbols">${["f′(x)", "x²", "−", "="].map((v) => `<button type="button" data-symbol="${esc(v)}">${esc(v)}</button>`).join("")}</div>`
         : ""
     }
-    <p class="privacy-note">${icon("lock")} Only your tutor sees this.${state.live ? " AI helps read it." : ""}</p>
+    <p class="privacy-note">${icon("lock")} Only your tutor sees this.${state.live ? " AI helps read it." : state.simulated && hasPhoto ? " In this demo your tutor reads uploaded photos." : ""}</p>
     <p class="field-error" id="pilot-error" role="alert" ${pilotError ? "" : "hidden"}>${esc(pilotError)}</p>
     <button class="send-action" type="submit" ${hasPhoto || draft.trim() ? "" : "disabled"}>Send to tutor <span aria-hidden="true">↗</span></button>
     </form></section>`;
@@ -258,9 +276,9 @@ function sentCard() {
   const review = state.attempt;
   return `<section class="composer sent-card" role="status"><span class="sent-check" aria-hidden="true">✓</span>
     <h2 tabindex="-1">Your step is with your tutor.</h2>
-    ${lastSentPhoto ? `<img class="receipt-photo" src="${lastSentPhoto}" alt="Photo you sent">` : ""}
-    ${review.line ? `<blockquote>${esc(review.line)}</blockquote>` : ""}
-    <p>${review.mode === "live" || review.line ? esc(review.hint) : "You can return to the exercise or replace your submission."}</p>
+    ${lastSentPhoto || review.notebook ? `<img class="receipt-photo" src="${lastSentPhoto || "/samples/" + esc(review.notebook) + ".png"}" alt="Notebook page you submitted">` : ""}
+    ${review.line ? `<p class="small">${review.notebook ? "Scripted reading of this sample" : "Your step"}</p><blockquote>${esc(review.line)}</blockquote>` : ""}
+    <p>${esc(review.hint)}</p>
     ${review.fallback ? '<p class="fallback-note">Live analysis was unavailable. Your tutor still received your step.</p>' : ""}
     <button class="quiet-action" data-pilot="revise">${icon("pen")} Revise my step</button></section>`;
 }
@@ -289,7 +307,7 @@ function groupRow(group, open) {
     .map(
       (ex) => `<div class="review-entry">
     ${ex.photo ? `<a class="photo-link" href="${esc(ex.photo)}" target="_blank" rel="noopener"><img src="${esc(ex.photo)}" alt="Open notebook photo at full size"></a>` : ""}
-    <div>${ex.line ? `<blockquote>${esc(ex.line)}</blockquote>` : ""}
+    <div>${ex.example ? "<small>Prepared classmate</small>" : ""}${ex.line ? `<blockquote>${esc(ex.line)}</blockquote>` : ""}
     <label class="change-group">Group <select data-review="${esc(ex.id)}">${state.groups.map((g) => `<option value="${g.id}" ${g.id === group.id ? "selected" : ""}>${esc(groupLabels[g.id])}</option>`).join("")}</select></label></div></div>`,
     )
     .join("");
@@ -300,15 +318,61 @@ function groupRow(group, open) {
 
 function joinPanel() {
   return `<aside class="invite-panel"><div class="panel-heading"><h2>Invite students</h2>${icon("people")}</div>
-    <img class="invite-qr" src="/qr.png" alt="Scan to join the exercise"><span class="qr-code">Room ${esc(state.room)}</span>
+    <img class="invite-qr" src="/qr.png" alt="Scan to join the exercise"><span class="qr-code">${state.showcase ? "Scan to open the exercise" : "Room " + esc(state.room)}</span>
     <button class="copy-action" data-pilot="copy">${icon("link")} Copy student link</button>
     <a class="open-student" href="${esc(state.join)}" target="_blank" rel="noopener">Open student view ↗</a></aside>`;
+}
+function studentShowcase(exerciseAndAttempt) {
+  const nav = `<nav class="tabs show-tabs" aria-label="Student views">${["Class", "Study", "Standings"].map((t) => `<button data-tab="${t}" aria-current="${t === tab}">${t}</button>`).join("")}</nav>`;
+  if (tab === "Study")
+    return (
+      nav +
+      `<section class="composer"><h2>Try another on paper</h2><p>${esc(state.practice.prompt)}</p><details><summary>Check your working</summary><p>${esc(state.practice.explanation)}</p></details></section>`
+    );
+  if (tab === "Standings")
+    return (
+      nav +
+      `<section class="composer"><h2>Class standings</h2><p>One point for the fresh answer and its reason. Ties share the lead.</p>${board()}
+    <form data-form="alias"><label class="compose-field">Your optional alias<input id="alias" maxlength="20" type="text" value="${esc(aliasDraft)}" placeholder="Display name"></label><p class="small">Leave blank to keep your score private.</p><button class="copy-action">Save preference</button></form></section>`
+    );
+  return (
+    nav +
+    exerciseAndAttempt +
+    (state.challenge
+      ? `<div class="show-challenge">${challengeView()}</div>`
+      : state.attempt
+        ? '<section class="composer show-wait"><h2>Next up: a fresh challenge</h2><p>It will appear here when your tutor opens it.</p></section>'
+        : "")
+  );
+}
+function tutorControls() {
+  const follow = state.challenge || state.suggested;
+  const pred = state.prediction;
+  return `<section class="responses"><div class="response-title"><h2>What to watch for</h2></div>
+    ${
+      pred
+        ? `<p class="small">${pred.mode === "live" ? "AI forecast" : "Prepared forecast"} · possibilities before seeing the class’s work</p>
+      ${pred.items.map((i) => `<div class="predict"><strong>${esc(i.mistake)}</strong><p>${esc(i.signal)}</p><p class="small">Ask “${esc(i.question)}”</p></div>`).join("")}`
+        : '<button class="copy-action" data-action="forecast">Preview likely mistakes</button>'
+    }
+    </section>
+    <section class="responses"><div class="response-title"><h2>Fresh challenge</h2></div>
+    ${state.count || state.challenge ? `<strong>${esc(follow.title)}</strong><p>${esc(follow.prompt)}</p><p class="small">Why this question? ${esc(state.recommendationReason)}</p>` : "<p>Collect a step to see the recommended question.</p>"}
+    ${state.challenge ? `<strong>Open on phones</strong><p>${state.audienceCorrect} of ${state.audienceScored} audience answers earned a point.</p>${board()}` : `<button class="send-action" data-action="release" ${state.count ? "" : "disabled"}>Open challenge on phones</button>`}</section>`;
+}
+function simulationTools() {
+  return `<section class="invite-panel walkthrough"><h2>Rehearse the round</h2>
+    <p class="small">Add three prepared classmates to show the feedback loop with one presenter. Audience steps count separately.</p>
+    <button class="copy-action" data-action="examples" ${state.examples || state.challenge ? "disabled" : ""}>${state.examples ? "Example class loaded" : "Load example class"}</button>
+    <button class="sample-link" data-pilot="reset">Start a fresh round</button>
+    ${confirmRestart ? '<p class="small">Clear submissions and scores for everyone in this demo room?</p><button data-action="restart">Reset round</button> <button data-pilot="keep">Cancel</button>' : ""}</section>`;
 }
 function pilotView() {
   roomHeader(host ? "Tutor view" : "Student view", state.room);
   if (!host) {
     app.className = "pilot student-pilot";
-    app.innerHTML = `<div class="student-layout">${exerciseCard()}${state.attempt && !editing ? sentCard() : studentComposer()}</div>`;
+    const student = `<div class="student-layout">${exerciseCard()}${state.attempt && !editing ? sentCard() : studentComposer()}</div>`;
+    app.innerHTML = state.showcase ? studentShowcase(student) : student;
     drawSheets();
     return;
   }
@@ -316,16 +380,16 @@ function pilotView() {
   const opened = expandedGroup ?? groups[0]?.id;
   app.className = "pilot tutor-pilot";
   app.innerHTML = `<div class="tutor-title"><div><p class="section-meta"><span class="live-dot"></span><span data-connection>Room open</span> · ${esc(state.lesson.course)}</p><h1>Class responses</h1></div>
-    <a class="project-action" href="/board?room=${esc(state.room)}" target="_blank" rel="noopener">${icon("screen")} Project exercise <span>↗</span></a></div>
+    <a class="project-action" href="${state.showcase ? "/board" : "/board?room=" + esc(state.room)}" target="_blank" rel="noopener">${icon("screen")} Project exercise <span>↗</span></a></div>
     <div class="tutor-layout"><div class="tutor-main">${exerciseCard()}
-      <section class="responses"><div class="response-title"><h2>Student steps</h2><span>${state.count} sent · ${state.joined} joined</span></div>
+      <section class="responses"><div class="response-title"><h2>Student steps</h2><span>${state.simulated ? `${state.count - state.examples} audience · ${state.examples} prepared` : `${state.count} sent · ${state.joined} joined`}</span></div>
         ${
           state.count
             ? groups.map((g) => groupRow(g, opened === g.id)).join("")
             : `<div class="empty-responses"><span class="empty-symbol">${icon("sheets")}</span><div><h3>Waiting for the first step</h3><p>Students can scan the QR on the projector to send their working.</p></div></div>`
         }
         ${state.fallbackCount ? `<p class="fallback-note">Live analysis was unavailable for ${state.fallbackCount} current submission(s). Check their working.</p>` : ""}
-      </section></div>${joinPanel()}</div>`;
+      </section>${state.showcase ? tutorControls() : ""}</div><div>${joinPanel()}${state.simulated ? simulationTools() : ""}</div></div>`;
   drawSheets();
 }
 
@@ -333,8 +397,8 @@ function projectorView() {
   roomHeader("Class screen", state.room);
   app.className = "pilot projection";
   app.innerHTML = `<div class="project-layout">${exerciseCard()}<aside class="invite-panel"><h2>Join the exercise</h2>
-    <img class="invite-qr" src="/qr.png" alt="Scan to join the exercise"><span class="qr-code">Room ${esc(state.room)}</span>
-    <p>${state.count} ${state.count === 1 ? "step" : "steps"} received</p></aside></div>
+    <img class="invite-qr" src="/qr.png" alt="Scan to join the exercise"><span class="qr-code">${state.showcase ? "Scan to join" : "Room " + esc(state.room)}</span>
+    <p>${state.simulated ? `${state.count - state.examples} audience · ${state.examples} prepared` : `${state.count} steps received`}</p></aside></div>
     ${state.challenge ? `<section class="card lavender"><h2>${esc(state.challenge.title)}</h2><p>${esc(state.challenge.prompt)}</p></section><section class="card"><h2>Standings</h2>${board()}</section>` : ""}`;
   drawSheets();
 }
@@ -351,10 +415,17 @@ function joinForm() {
   app.innerHTML =
     '<section class="join-box"><div class="join-stamp" aria-hidden="true">↗</div><h1>Join your class</h1><p>Enter the room code from the projector.</p><form data-form="join"><label class="compose-field">Room code<input id="code" maxlength="6" minlength="6" type="text" autocomplete="off" autocapitalize="characters" placeholder="ABC123" required></label><button class="send-action">Join room →</button></form></section>';
 }
-async function join(code) {
-  state = await api("join", { room: code.trim().toUpperCase() });
+async function join(code, direct = false) {
+  state = await api(
+    "join",
+    direct ? { direct: true } : { room: code.trim().toUpperCase() },
+  );
   roomCode = state.room;
-  history.replaceState(null, "", "/?room=" + roomCode);
+  history.replaceState(
+    null,
+    "",
+    state.showcase || direct ? "/join" : "/?room=" + roomCode,
+  );
   aliasDraft = state.alias;
   sharing = state.share;
   render();
@@ -409,6 +480,11 @@ app.addEventListener("input", (e) => {
 app.addEventListener("click", (e) => {
   const btn = e.target.closest("button");
   if (!btn || busy) return;
+  if (btn.dataset.notebook) {
+    selectedNotebook = btn.dataset.notebook;
+    render();
+    return;
+  }
   if (btn.dataset.group) {
     const wasOpen = btn.getAttribute("aria-expanded") === "true";
     expandedGroup = wasOpen ? "" : btn.dataset.group;
@@ -432,6 +508,17 @@ app.addEventListener("click", (e) => {
   }
   if (btn.dataset.pilot) {
     switch (btn.dataset.pilot) {
+      case "sample":
+        entryMode = "sample";
+        break;
+      case "reset":
+        confirmRestart = true;
+        render();
+        return;
+      case "keep":
+        confirmRestart = false;
+        render();
+        return;
       case "copy": {
         void (async () => {
           try {
@@ -506,6 +593,10 @@ app.addEventListener("click", (e) => {
       "host/" + action,
       action === "mode" ? { live: !state.live } : {},
     );
+    if (action === "restart") {
+      expandedGroup = null;
+      confirmRestart = false;
+    }
     render();
   }, btn);
 });
@@ -517,12 +608,24 @@ app.addEventListener("submit", (e) => {
       await join(document.querySelector("#code").value);
       return;
     }
-    if (form.dataset.form === "attempt") {
+    if (form.dataset.form === "notebook") {
+      state = await api("attempt", {
+        notebook: selectedNotebook,
+        share: true,
+        round: state.round,
+      });
+      photo = "";
+      lastSentPhoto = "";
+      draft = "";
+      editing = false;
+      entryMode = "choose";
+    } else if (form.dataset.form === "attempt") {
       const attachment = state.pilot && entryMode !== "photo" ? "" : photo;
       state = await api("attempt", {
         text: draft,
         image: attachment,
         share: state.pilot || sharing,
+        round: state.round,
       });
       lastSentPhoto = attachment;
       pilotError = "";
@@ -535,6 +638,7 @@ app.addEventListener("submit", (e) => {
       state = await api("score", {
         answer: Number(d.get("answer")),
         reason: Number(d.get("reason")),
+        round: state.round,
       });
     } else if (form.dataset.form === "alias") {
       state = await api("alias", { alias: aliasDraft });
@@ -542,7 +646,7 @@ app.addEventListener("submit", (e) => {
       tell("Standings preference saved.");
     }
     render();
-    if (state.pilot && form.dataset.form === "attempt")
+    if (state.pilot && ["attempt", "notebook"].includes(form.dataset.form))
       document.querySelector(".sent-card h2")?.focus({ preventScroll: true });
   }, e.submitter);
 });
@@ -604,7 +708,9 @@ async function refresh() {
   try {
     const next = await api(
       projection
-        ? "board?room=" + encodeURIComponent(roomCode)
+        ? state.showcase
+          ? "board"
+          : "board?room=" + encodeURIComponent(roomCode)
         : host
           ? "host/state"
           : "state",
@@ -617,6 +723,23 @@ async function refresh() {
       JSON.stringify(next) === JSON.stringify(previous)
     )
       return;
+    if (next.showcase && next.round !== previous.round) {
+      state = next;
+      tab = "Class";
+      editing = false;
+      draft = "";
+      photo = "";
+      lastSentPhoto = "";
+      entryMode = "choose";
+      aliasDraft = "";
+      expandedGroup = null;
+      confirmRestart = false;
+      showPhotoNote = false;
+      pilotError = "";
+      render();
+      tell("A fresh round is open.");
+      return;
+    }
     // Avoid destroying in-progress answers, keyboard focus or expanded study notes on a poll.
     if (
       document.activeElement?.matches("textarea,input,select") ||
@@ -642,8 +765,13 @@ try {
     state = await api("host/state");
     render();
   } else if (projection) {
-    state = await api("board?room=" + encodeURIComponent(roomCode));
+    state = await api(
+      roomCode ? "board?room=" + encodeURIComponent(roomCode) : "board",
+    );
+    roomCode = state.room;
     render();
+  } else if (location.pathname === "/join") {
+    await join("", true);
   } else if (roomCode) {
     await join(roomCode);
   } else {
@@ -655,6 +783,10 @@ try {
       '<section class="card center"><h2>Presenter access</h2><p>Open the private presenter link printed when you start the room.</p></section>';
   } else if (projection) {
     app.textContent = "Open the projector link from the professor’s view.";
+  } else if (location.pathname === "/join") {
+    app.innerHTML =
+      '<section class="card center"><h2>Couldn’t join the exercise</h2><p>Check your connection and reload this page.</p></section>';
+    tell(error.message);
   } else {
     joinForm();
     tell(error.message);

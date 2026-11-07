@@ -1411,3 +1411,71 @@ main.pilot {
 .sent-card h2:focus {
   outline: none;
 }
+.demo-label {
+  font-weight: 700;
+  color: #5349b2;
+  background: #efedff;
+  border-radius: 8px;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+.sample-link {
+  display: block;
+  border: 0;
+  background: none;
+  color: #4f43b7;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-size: 14px;
+  padding: 10px 0;
+}
+.notebook-picks {
+  display: flex;
+  gap: 8px;
+}
+.notebook-picks button {
+  flex: 1;
+  font-size: 14px;
+}
+.notebook-picks [aria-pressed="true"] {
+  background: #eeeaff;
+  color: #4333a0;
+  border-color: #9f95db;
+}
+.walkthrough {
+  margin-top: 14px;
+  text-align: left;
+}
+.walkthrough .small {
+  margin-top: 10px;
+}
+.show-tabs {
+  max-width: 960px;
+  margin: 0 auto 16px;
+}
+.show-tabs + .student-layout {
+  margin-top: 0;
+}
+.show-challenge,
+.show-wait,
+.show-tabs + .composer {
+  max-width: 960px;
+  margin: 16px auto;
+}
+.show-challenge .card p {
+  font-size: 17px;
+}
+.show-challenge .card {
+  padding: 24px;
+}
+@media (max-width: 760px) {
+  .show-tabs,
+  .show-challenge,
+  .show-wait,
+  .show-tabs + .composer {
+    max-width: 520px;
+  }
+  .walkthrough {
+    max-width: 360px;
+  }
+}

@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: solution-room-demo
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm run demo
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.16.0

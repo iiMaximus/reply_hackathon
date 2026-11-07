@@ -4,6 +4,7 @@ import { networkInterfaces } from "node:os";
 import { readFile } from "node:fs/promises";
 import QRCode from "qrcode";
 import { analyze, forecast } from "./analysis.mjs";
+import { notebooks, notebookReview, sampleClass } from "./simulation.mjs";
 import {
   groups,
   lesson,
@@ -15,8 +16,18 @@ import {
 } from "./lesson.mjs";
 
 const pilot = process.argv.includes("--poc");
+const simulated = process.argv.includes("--simulate");
+const liveClass = process.argv.includes("--live");
+const showcase = simulated || liveClass;
+if (liveClass && !simulated && !process.env.OPENAI_API_KEY) {
+  throw new Error(
+    "Live classroom needs OPENAI_API_KEY. For the offline simulation use npm run demo.",
+  );
+}
 const port = Number(
-  pilot ? (process.env.POC_PORT ?? 4174) : (process.env.PORT ?? 4173),
+  pilot
+    ? (process.env.POC_PORT ?? 4174)
+    : (process.env.PORT ?? (showcase ? 4175 : 4173)),
 );
 const addr = Object.values(networkInterfaces())
   .flat()
@@ -27,8 +38,14 @@ const room = randomBytes(3).toString("hex").toUpperCase();
 let join;
 const people = new Map();
 const openReview = new Set();
-let live = Boolean(process.env.OPENAI_API_KEY);
+let live = !simulated && Boolean(process.env.OPENAI_API_KEY);
+const examples = new Map();
+let round = 1;
+function participants() {
+  return [...examples.values(), ...people.values()];
+}
 let challenge = null;
+let releaseReason = null;
 let prediction = null;
 let predictionJob = null;
 let aiRequests = 0;
@@ -41,6 +58,13 @@ const files = {
   "/board": [new URL("index.html", web), "text/html; charset=utf-8"],
   "/app.js": [new URL("app.js", web), "text/javascript; charset=utf-8"],
   "/style.css": [new URL("style.css", web), "text/css; charset=utf-8"],
+  "/join": [new URL("index.html", web), "text/html; charset=utf-8"],
+  ...Object.fromEntries(
+    Object.keys(notebooks).map((id) => [
+      "/samples/" + id + ".png",
+      [new URL("samples/" + id + ".png", web), "image/png"],
+    ]),
+  ),
   "/sans.woff2": [
     new URL(
       "../node_modules/@fontsource-variable/dm-sans/files/dm-sans-latin-wght-normal.woff2",
@@ -103,20 +127,30 @@ async function body(req) {
   fail(400, "Invalid request.");
 }
 function standings() {
-  return [...people.values()]
+  return participants()
     .filter((p) => p.alias && p.scored?.point)
-    .map((p) => ({ alias: p.alias, points: 1 }));
+    .map((p) => ({
+      alias: p.alias,
+      points: 1,
+      ...(p.example ? { example: true } : {}),
+    }));
 }
 function dashboard() {
-  const students = [...people.values()];
+  const students = participants();
   const submitted = students.filter((p) => p.attempt);
   const suggested = recommend(submitted.map((p) => p.attempt));
   return {
     room,
     join,
-    pilot,
+    pilot: pilot || showcase,
+    showcase,
+    simulated,
+    round,
+    examples: examples.size,
     live,
-    canLive: Boolean(process.env.OPENAI_API_KEY),
+    canLive: !simulated && Boolean(process.env.OPENAI_API_KEY),
+    audienceScored: [...people.values()].filter((p) => p.scored).length,
+    audienceCorrect: [...people.values()].filter((p) => p.scored?.point).length,
     count: submitted.length,
     fallbackCount: submitted.filter((p) => p.attempt.fallback).length,
     joined: students.length,
@@ -129,6 +163,10 @@ function dashboard() {
         .map((p) => ({
           id: p.reviewId,
           line: p.attempt.line,
+          ...(p.example ? { example: true } : {}),
+          ...(p.attempt.notebook
+            ? { photo: "/samples/" + p.attempt.notebook + ".png" }
+            : {}),
           ...(p.photo
             ? { photo: "/api/host/photo/" + p.reviewId + "?v=" + p.version }
             : {}),
@@ -136,6 +174,11 @@ function dashboard() {
     })),
     suggested: publicVariant(suggested),
     challenge: publicVariant(challenge),
+    recommendationReason:
+      releaseReason ??
+      (suggested === "factor"
+        ? "A step divided by x without showing the zero case."
+        : "Test whether students can find both stationary values when the factors change."),
     board: standings(),
     lesson,
     prediction,
@@ -144,7 +187,10 @@ function dashboard() {
 function studentView(p) {
   return {
     room,
-    pilot,
+    pilot: pilot || showcase,
+    showcase,
+    simulated,
+    round,
     lesson: studentLesson(),
     practice,
     challenge: publicVariant(challenge),
@@ -160,6 +206,17 @@ function studentView(p) {
 async function handle(req, res) {
   const url = new URL(req.url, "http://localhost");
   const path = url.pathname;
+  if (path === "/health" && req.method === "GET")
+    return json(res, { ok: true });
+  if (
+    path === "/" &&
+    showcase &&
+    req.method === "GET" &&
+    !url.searchParams.has("room")
+  ) {
+    res.writeHead(302, { Location: "/join", "Cache-Control": "no-store" });
+    return res.end();
+  }
   if (req.method === "GET" && Object.hasOwn(files, path)) {
     const [file, type] = files[path];
     res.setHeader("Content-Type", type);
@@ -172,11 +229,18 @@ async function handle(req, res) {
     return;
   }
   if (req.method === "GET" && path === "/api/board") {
-    if (url.searchParams.get("room") !== room)
+    if (
+      url.searchParams.get("room") !== room &&
+      !(showcase && !url.searchParams.has("room"))
+    )
       fail(404, "Open the projector link from the professor’s view.");
-    const count = [...people.values()].filter((p) => p.attempt).length;
+    const count = participants().filter((p) => p.attempt).length;
     return json(res, {
       room,
+      showcase,
+      simulated,
+      round,
+      examples: examples.size,
       lesson: studentLesson(),
       count,
       challenge: publicVariant(challenge),
@@ -193,7 +257,11 @@ async function handle(req, res) {
   if (path.startsWith("/api/host/")) {
     if (cookie(req, "host") !== secret)
       fail(403, "Open the private presenter link printed by the server.");
-    if (pilot && req.method === "GET" && path.startsWith("/api/host/photo/")) {
+    if (
+      (pilot || showcase) &&
+      req.method === "GET" &&
+      path.startsWith("/api/host/photo/")
+    ) {
       const id = path.slice("/api/host/photo/".length);
       const person = [...people.values()].find((p) => p.reviewId === id);
       if (
@@ -216,10 +284,43 @@ async function handle(req, res) {
     if (pilot && path !== "/api/host/correct")
       fail(404, "This room is for sharing one step.");
     if (path === "/api/host/release") {
+      if (showcase && !participants().some((p) => p.attempt))
+        fail(409, "Collect a step first.");
       challenge ??= recommend(
-        [...people.values()].filter((p) => p.attempt).map((p) => p.attempt),
+        participants()
+          .filter((p) => p.attempt)
+          .map((p) => p.attempt),
       );
+      releaseReason ??=
+        challenge === "factor"
+          ? "A step divided by x without showing the zero case."
+          : "Test whether students can find both stationary values when the factors change.";
+      for (const p of examples.values())
+        p.scored ??= { point: p.alias !== "Sam" };
+    } else if (simulated && path === "/api/host/examples") {
+      if (!examples.size && challenge)
+        fail(409, "Restart the round before loading an example class.");
+      if (!examples.size)
+        for (const p of sampleClass()) examples.set(p.reviewId, p);
+    } else if (simulated && path === "/api/host/restart") {
+      examples.clear();
+      for (const p of people.values()) {
+        Object.assign(p, {
+          attempt: null,
+          photo: null,
+          share: false,
+          alias: "",
+          scored: null,
+          reviews: 0,
+        });
+        p.version++;
+      }
+      prediction = null;
+      challenge = null;
+      releaseReason = null;
+      round++;
     } else if (path === "/api/host/mode") {
+      if (showcase) fail(409, "This classroom’s analysis mode is fixed.");
       live = Boolean(input.live && process.env.OPENAI_API_KEY);
     } else if (path === "/api/host/forecast") {
       if (!prediction || (live && prediction.mode === "rehearsal")) {
@@ -233,7 +334,7 @@ async function handle(req, res) {
         prediction = await predictionJob;
       }
     } else if (path === "/api/host/correct") {
-      const p = [...people.values()].find(
+      const p = participants().find(
         (p) => p.reviewId === input.id && p.share && p.attempt,
       );
       if (!p || !Object.hasOwn(groups, input.group))
@@ -244,13 +345,14 @@ async function handle(req, res) {
   }
   let p = people.get(cookie(req, "student"));
   if (path === "/api/join" && req.method === "POST") {
-    if ((await body(req)).room !== room)
+    const input = await body(req);
+    if (input.room !== room && input.direct !== true)
       fail(
         404,
         "Scan the room code on the projector or enter the six characters.",
       );
     if (!p) {
-      if (people.size >= (pilot ? 20 : 300))
+      if (people.size >= (pilot ? 20 : showcase ? 100 : 300))
         fail(429, "This demo room is full.");
       const token = randomBytes(20).toString("hex");
       p = {
@@ -272,19 +374,30 @@ async function handle(req, res) {
     return json(res, studentView(p));
   if (req.method !== "POST") fail(405, "Unsupported action.");
   const input = await body(req);
+  if (showcase && input.round !== undefined && input.round !== round)
+    fail(409, "The tutor started a new round. Refresh and try again.");
   if (pilot && path !== "/api/attempt")
     fail(404, "This room is for sharing one step.");
   if (path === "/api/attempt") {
     const text =
       typeof input.text === "string" ? input.text.trim().slice(0, 1500) : "";
     const image = input.image || null;
+    const notebook =
+      simulated &&
+      typeof input.notebook === "string" &&
+      Object.hasOwn(notebooks, input.notebook)
+        ? input.notebook
+        : null;
+    if (input.notebook && (!notebook || text || image))
+      fail(400, "Choose a prepared page or send your own work.");
     if (
       image &&
       (typeof image !== "string" ||
         !/^data:image\/(?:jpeg|png|webp);base64,[a-zA-Z0-9+/=]+$/.test(image))
     )
       fail(400, "Use a JPEG, PNG or WebP photo.");
-    if (!text && !image) fail(400, "Add a photo or type a step first.");
+    if (!text && !image && !notebook)
+      fail(400, "Add a photo or type a step first.");
     if (openReview.has(p)) fail(409, "Your last step is still being read.");
     openReview.add(p);
     try {
@@ -293,16 +406,18 @@ async function handle(req, res) {
         p.reviews++;
         aiRequests++;
       }
-      const review = await analyze({ text, image, live: useLive });
+      const review = notebook
+        ? notebookReview(notebook)
+        : await analyze({ text, image, live: useLive });
       if (live && !useLive) review.fallback = true;
       if (image && review.mode === "rehearsal" && !text)
         review.hint =
-          pilot && input.share === true
+          (pilot || showcase) && input.share === true
             ? "Your tutor can read the photo. You can add a line if you want to clarify it."
             : "Type the line from your photo so the rehearsal can group your step.";
       p.attempt = review;
       p.share = input.share === true;
-      if (pilot) {
+      if (pilot || showcase) {
         p.photo = p.share ? image : null;
         p.version++;
       }
@@ -328,7 +443,7 @@ async function handle(req, res) {
       .trim()
       .slice(0, 20);
     if (
-      [...people.values()].some(
+      participants().some(
         (other) =>
           other !== p &&
           alias &&
@@ -359,16 +474,26 @@ server.listen(port, "0.0.0.0", () => {
   const boundPort = server.address().port;
   origin = new URL(
     process.env.PUBLIC_ORIGIN ||
+      process.env.RENDER_EXTERNAL_URL ||
       "http://" + (addr?.address || "localhost") + ":" + boundPort,
   ).origin;
-  join = origin + "/?room=" + room;
+  join = origin + (showcase ? "/join" : "/?room=" + room);
   console.log(
-    "Professor: http://localhost:" + boundPort + "/present#" + secret,
+    "Professor: " +
+      (process.env.RENDER_EXTERNAL_URL ||
+        process.env.PUBLIC_ORIGIN ||
+        "http://localhost:" + boundPort) +
+      "/present#" +
+      secret,
   );
   console.log(
     "Students: " +
       join +
       " · " +
-      (live ? "Live analysis" : "Rehearsal analysis"),
+      (simulated
+        ? "Scripted simulation"
+        : live
+          ? "Live analysis"
+          : "Rehearsal analysis"),
   );
 });
