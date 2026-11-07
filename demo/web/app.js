@@ -53,7 +53,7 @@ function board() {
   const rows = state.board
     .map(
       (p) =>
-        `<div class="spread boardrow"><span>${esc(p.alias)}${p.example ? " · example" : ""}</span><strong>1 pt · joint lead</strong></div>`,
+        `<div class="spread boardrow"><span>${esc(p.alias)}${p.example ? " · example" : ""}</span><strong>1 pt${state.board.length > 1 ? " · joint lead" : ""}</strong></div>`,
     )
     .join("");
   return (
@@ -322,7 +322,7 @@ function groupRow(group, open) {
     .map(
       (ex) => `<div class="review-entry">
     ${ex.photo ? `<a class="photo-link" href="${esc(ex.photo)}" target="_blank" rel="noopener"><img src="${esc(ex.photo)}" alt="Open notebook photo at full size"></a>` : ""}
-    <div>${ex.example ? "<small>Prepared classmate</small>" : ""}${ex.line ? `<blockquote>${esc(ex.line)}</blockquote>` : ""}
+    <div>${ex.example ? `<small>${esc(ex.exampleName)} · example notebook</small>` : "<small>Audience submission</small>"}${ex.line ? `<blockquote>${esc(ex.line)}</blockquote>` : ""}
     <label class="change-group">Group <select data-review="${esc(ex.id)}">${state.groups.map((g) => `<option value="${g.id}" ${g.id === group.id ? "selected" : ""}>${esc(groupLabels[g.id])}</option>`).join("")}</select></label>${traceDetails(ex)}</div></div>`,
     )
     .join("");
@@ -333,7 +333,7 @@ function groupRow(group, open) {
 
 function joinPanel() {
   return `<aside class="invite-panel"><div class="panel-heading"><h2>Invite students</h2>${icon("people")}</div>
-    <img class="invite-qr" src="/qr.png" alt="Scan to join the exercise"><span class="qr-code">${state.showcase ? "Scan to open the exercise" : "Room " + esc(state.room)}</span>
+    <img class="invite-qr" src="/qr.png" alt="Scan to join the exercise"><span class="qr-code">${state.showcase ? "Scan to join" : "Room " + esc(state.room)}</span>
     <button class="copy-action" data-pilot="copy">${icon("link")} Copy student link</button>
     <a class="open-student" href="${esc(state.join)}" target="_blank" rel="noopener">Open student view ↗</a></aside>`;
 }
@@ -364,7 +364,11 @@ function tutorForecast() {
 }
 function nextMove() {
   const follow = state.challenge || state.suggested;
-  const lost = state.groups.find((g) => g.id === "lost").count;
+  const divisionGroup = state.groups.find((g) => g.id === "lost");
+  const lost = divisionGroup.count;
+  const visible =
+    divisionGroup.excerpts.find((e) => !e.example && e.line) ||
+    divisionGroup.excerpts.find((e) => e.line);
   const pending = state.groups.find((g) => g.id === "unclear").count;
   const line = lost
     ? `${lost} of ${state.count} submissions divide by x. Check the zero case together before moving on.`
@@ -376,6 +380,7 @@ function nextMove() {
     <p class="small">${state.audienceScored ? `${state.audienceCorrect} of ${state.audienceScored} audience answers earned a point.` : "Waiting for an audience answer."}</p>${board()}</section>`;
   return `<section class="responses next-move"><h2>What to cover next</h2>
     <p>${state.count ? esc(line) : "Share the exercise and wait for a first step."}</p>
+    ${visible ? `<figure class="evidence-slip"><figcaption>${visible.example ? esc(visible.exampleName) + " · example notebook" : "Anonymous audience step"}</figcaption><blockquote>${esc(visible.line)}</blockquote></figure>` : ""}
     ${
       follow
         ? `<div class="follow-preview"><p class="eyebrow">Next question</p><p>${esc(follow.prompt)}</p></div>
