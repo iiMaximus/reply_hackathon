@@ -2,9 +2,21 @@
 
 Reply Student Tech Clash 2026 · AI on Campus
 
-## Revised shortlist
+## The Second Vote
 
-These seven concepts give students a concrete first move and produce evidence that a lecturer or judge can inspect. The earlier brainstorm below records how the ideas evolved. For the problem of starting a study session, my first choice to test is **Case 4.00**.
+**Problem to test at PoliTO.** In a worked-example tutorial, a student can follow every line the professor puts on the board and still be unable to choose the first step on a new problem. The professor has to decide whether to explain that step again or move on, often before anyone has tried it independently.
+
+**The idea.** Pause one exercise the professor already teaches, just before the step where students tend to get stuck. Everyone privately predicts the outcome and gives a short reason. The agent looks for two explanations that agree on this case and predict different outcomes on another. The professor can approve the interpretation, invite two nearby students to compare their reasoning, and give the room the new case to solve alone. The results help the professor choose what to work through at the board. Each student can start a related practice problem privately and resume it later.
+
+**What a judge can play.** In the [team's cantilever example](Ideas.md), fix the load, material and width of a slender rectangular beam. Double its length and height together. Two students predict unchanged tip deflection. One believes deflection scales with the cube of the length-to-height ratio; the other believes it scales linearly. Ask them to discuss which parts of the formula change, then privately revise their reasoning on the original question. Next, double **only the length** relative to the original beam and have each student predict independently. The two rules now give **8×** and **2×**. The verified answer is **8×**. Even if both students keep their original vote, their individual work on this new case gives the professor a reason to revisit the cubic dependence or move on.
+
+**What makes it worth building.** Kahoot already reports difficult questions and students who may need follow-up. Wooclap groups responses and generates follow-up questions. Pearson Learning Catalytics can group nearby students by their answers for discussion and another vote. Our design bet is narrower: interpret two students' own explanations, show the professor a checked example on which those explanations predict different answers, and see which reasoning survives when students work alone. If the language is ambiguous, ask the students to clarify; if no useful contrast emerges, the professor can continue the exercise. [Kahoot reports](https://support.kahoot.com/hc/en-us/articles/360035063054-Kahoot-quiz-reports) · [Wooclap live facilitation](https://www.wooclap.com/en/ai-live-facilitator/) · [Pearson's grouping workflow](https://help.pearsoncmg.com/learning_catalytics/instructor/en/Content/Topics/module_delivery_in_session/lc_in_class_synchronous.htm)
+
+**First pilot.** Ask one tutor for an exercise already on next week's sheet and the step students usually copy without attempting. Prepare one QR room for a five-minute pause. Ask afterward whether seeing the students' reasoning changed the tutor's next explanation, whether the pause was worth the class time, and whether students can explain a fresh case without help. An undergraduate peer-instruction study used a fresh individual question to distinguish understanding from simply adopting a partner's answer. [Original study](https://pubmed.ncbi.nlm.nih.gov/19119232/) · [Agent debate and alternate Analisi I demo](DEBATE.md)
+
+## Earlier shortlist
+
+These seven concepts preceded the classroom proposal. **Case 4.00** was the first pick in that round for helping students start a study session.
 
 | Rank and idea | Audience and first move | What the agent and tools do |
 | --- | --- | --- |
