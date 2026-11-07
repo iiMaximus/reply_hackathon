@@ -1,11 +1,25 @@
 services:
   - type: web
-    name: solution-room-demo
+    name: solution-room
     runtime: node
-    plan: free
+    plan: starter
     buildCommand: npm ci
-    startCommand: npm run demo
+    startCommand: npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
-        value: 22.16.0
+        value: 24.18.0
+      - key: DATABASE_PATH
+        value: /var/data/classroom.sqlite
+      - key: TRUST_PROXY
+        value: 1
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4.1-mini
+    disk:
+      name: classroom-data
+      mountPath: /var/data
+      sizeGB: 1

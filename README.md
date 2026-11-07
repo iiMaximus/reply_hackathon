@@ -4,11 +4,37 @@ Reply Student Tech Clash 2026 · AI on Campus
 
 ## Solution Room
 
-**[Play the simulated classroom](demo/README.md#play-the-simulated-classroom).** Run `npm run demo` or [deploy the simulation on Render](https://render.com/deploy?repo=https://github.com/iiMaximus/reply_hackathon). Students scan straight into the exercise. Try a prepared notebook, see the tutor’s feedback, play the follow-up and compare scores. The simulation is labeled throughout; the model-backed version runs separately with `npm run live`.
+### Run the working app
 
-**[Try the one-exercise proof of concept first](demo/README.md#start-with-the-proof-of-concept).** Run `npm run poc`. Students send an unfinished step from their phones and a tutor decides what to explain from the incoming work. The guide includes a five-minute classroom test and a criterion for trying a second session.
+Requires **Node.js 24+**. SQLite is built into Node; no separate database server or frontend build step is needed.
 
-**[Run the phone demo, see the architecture and rehearse the pitch](demo/README.md)**. The repository now includes a working student room, a professor dashboard and an offline rehearsal path. Before anyone submits, the professor can request likely mistakes and example steps to watch for. The live counts come only from submitted work.
+```sh
+npm ci
+cp .env.example .env
+npm start
+```
+
+Open **http://localhost:4173**. Add `OPENAI_API_KEY` to `.env` and restart for AI feedback. Without a key, answers are saved for professor review; the app does not invent scores. `OPENAI_MODEL` defaults to `gpt-4.1-mini` and can be changed to a Responses-compatible vision model with Structured Outputs support.
+
+1. Create a **professor** account, create a class, and copy its join code.
+2. Add approved course material under **Resources**, then publish a question. Question text supports GitHub-style Markdown and images; reference answers and rubrics stay private.
+3. Open a private browser window, create a **student** account, and join with the code. Approve the request in **Students**, or use open/whitelist joining.
+4. Submit Markdown, a photo, or a whiteboard drawing. Review feedback and past attempts.
+5. Return to the professor window to inspect responses, override assessments, view statistics, and generate a summary. Review and publish its proposed follow-up.
+
+Notifications are stored in-app and checked every 15 seconds. Optional browser alerts work while the page is open. This version does not send email or background push messages.
+
+Student resource contributions enter a professor review inbox. Approved resources ground future AI feedback; links are saved but their contents are not fetched. Plain-text/Markdown imports and PNG/JPEG/WebP/GIF images are supported; PDFs are not supported yet.
+
+```sh
+npm run dev    # Restart backend automatically when source changes
+npm run check  # Syntax checks
+npm test       # API integration tests; no OpenAI calls or key needed
+```
+
+The database, image blobs and sessions persist in `data/classroom.sqlite`; the local session secret lives beside it. Both are ignored by Git. Back up the data directory when the app is stopped. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for the code map, API and design decisions.
+
+The sections below preserve the product concept and earlier hackathon research; roadmap ideas are not all implemented.
 
 **Solution Room lets a professor see how students are approaching the exercise on the board while there is still time to explain a tricky step.** Students can snap a photo of their workings, upload a tablet screenshot or type a first move. The AI reads the steps against the professor’s course material and groups similar attempts for the professor. Students get private feedback and can try a fresh in-class challenge for a point on an optional weekly leaderboard. [Original classroom feedback proposal](ai-classroom-feedback-proposal.md)
 
