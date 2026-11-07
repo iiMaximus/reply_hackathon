@@ -1,4 +1,4 @@
-import { pitchExercise, pitchAnswers } from "./pitch-class.mjs";
+import { pitchExercise, pitchAnswers, pitchKey } from "./pitch-class.mjs";
 import { needsEnglish } from "./feedback-language.mjs";
 import { accuracy } from "../web/outcomes.js";
 import { randomUUID } from "node:crypto";
@@ -409,6 +409,7 @@ export function openClassroom({
   cloud,
   changed = () => {},
   initialDraft = null,
+  review = checkAnswer,
 }) {
   let draft = initialDraft,
     active = null,
@@ -664,7 +665,7 @@ export function openClassroom({
       players.set(p, player);
     }
     round.votes.set(p, v);
-    v.work = checkAnswer(round.q, text, match, cloud, image)
+    v.work = review(round.q, text, match, cloud, image)
       .catch(() => ({
         group: -1,
         hint: ambiguous.hint,
@@ -796,7 +797,18 @@ export function openClassroom({
         id: randomUUID(),
         remaining: [],
       };
-      const demo = openClassroom({ match, cloud, initialDraft: seed });
+      const demo = openClassroom({
+        match,
+        cloud,
+        initialDraft: seed,
+        async review(q, text) {
+          if (cloud.enabled) {
+            const result = await checkAnswer(q, text, match, cloud, null);
+            if (result.engine === cloud.model) return result;
+          }
+          return pitchKey(text);
+        },
+      });
       tell("Preparing 10 mock answers");
       await demo.publish(seed);
       const { id } = demo.board();
@@ -821,6 +833,14 @@ export function openClassroom({
       tell("Preparing the mock class report");
       await demo.close(id);
       mockReport = { ...demo.host().active, mock: true, samples };
+      if (!mockReport.summary.engine) {
+        mockReport.summary.boardExample =
+          "At x = 2 the three terms are 8, −6 and 48. Together they give 50.";
+        mockReport.summary.check =
+          "Replace the constant 8 with 5. How does the limit change?";
+        mockReport.summary.expected =
+          "Only the constant changes. The limit falls by three, to 47.";
+      }
     })();
     try {
       await mockRun;

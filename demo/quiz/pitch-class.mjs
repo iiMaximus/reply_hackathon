@@ -38,3 +38,25 @@ export const pitchAnswers = [
   "50",
   "42",
 ];
+
+// These are the known solutions for the authored rehearsal inputs only.
+export function pitchKey(text) {
+  const i = pitchAnswers.indexOf(text);
+  if (i < 0) throw Error("No prepared feedback for this example.");
+  const group = i < 4 ? 0 : i < 7 ? 1 : i === 7 ? 2 : -1;
+  const pattern = pitchExercise.patterns[group];
+  return {
+    group,
+    engine: "Prepared answer key",
+    hint:
+      pattern?.hint ||
+      "The number alone does not show how you evaluated the limit.",
+    diagnosis: group > 0 ? pattern.label : "",
+    practice:
+      [
+        "Change the input and substitute again.",
+        "Keep the constant in the substitution line.",
+        "Compare 12(2²) with (12·2)².",
+      ][group] || "Write the substitution for each term.",
+  };
+}

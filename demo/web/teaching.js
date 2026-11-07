@@ -285,6 +285,7 @@ function report(r) {
         : "Back to questions",
     ) +
     `<article class="report-sheet"><header><p class="report-meta">${metadata.map(h).join("　·　")}</p><h1>${math(r.topic || "Class report")}</h1><div class="rich report-question">${md(r.prompt)}</div></header>
+    ${r.mock ? `<p class="report-meta">Luna reviewed ${r.samples.filter((x) => x.engine !== "Prepared answer key").length} of 10 samples.${r.samples.some((x) => x.engine === "Prepared answer key") ? " Remaining feedback uses the prepared answer key." : ""}</p>` : ""}
     <section><h2>What students struggled with</h2>${observation}${missing}</section>
     ${s.reviewed ? `<section><h2>What to teach next</h2><p>${math(s.move)}</p>${s.boardExample ? `<blockquote class="rich">${md(s.boardExample)}</blockquote>` : ""}</section>` : ""}
     ${s.check ? `<section><h2>Check understanding</h2><div class="rich">${md(s.check)}</div><details><summary>Expected reasoning</summary>${md(s.expected || "")}</details></section>` : ""}

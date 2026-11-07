@@ -278,6 +278,10 @@ test("ten mock answers produce one reusable report and leave the real class alon
   assert.equal(report.summary.total, 10);
   assert.equal(report.summary.reviewed, 10);
   assert.equal(report.samples.length, 10);
+  assert.deepEqual(report.summary.accuracy,{correct:4,assessed:8,percent:50});
+  assert.equal(report.summary.unclear,2);
+  assert.deepEqual(report.summary.evidence.map(item=>item.count),[3,1]);
+  assert.ok(report.samples.every(sample=>sample.engine==="Prepared answer key"));
   assert.ok(report.mock);
   assert.deepEqual(room.student({}).standings, []);
   assert.equal(room.host().history.length, 0);
