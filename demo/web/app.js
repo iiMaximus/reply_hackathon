@@ -143,7 +143,7 @@ let showPhotoNote = false;
 let pilotError = "";
 let expandedGroup = null;
 let lastSentPhoto = "";
-let selectedNotebook = "divide";
+let selectedNotebook = "slope";
 let confirmRestart = false;
 
 function icon(name) {
@@ -225,6 +225,7 @@ function studentComposer() {
     return `<section class="composer"><button class="back-action" data-pilot="choose">← Input options</button>
       <h2>Try a sample notebook</h2><p>Pick a page and send it as your first attempt. You can revise the step after the hint.</p>
       <div class="notebook-picks">${[
+        ["slope", "Noor’s page"],
         ["divide", "Elena’s page"],
         ["factor", "Luca’s page"],
         ["derivative", "Sam’s page"],
@@ -392,7 +393,7 @@ function nextMove() {
     evidenceGroup.excerpts.find((e) => e.line);
   const pending = state.groups.find((g) => g.id === "unclear").count;
   const line = powerRoute
-    ? "An audience step predicts a different slope from the curve. Revisit the power rule before solving for zero."
+    ? `${visible?.example ? "An example notebook" : "An audience step"} predicts a different slope from the curve. Revisit the power rule before solving for zero.`
     : lost && follow?.title === "Keep every root"
       ? `${lost} of ${state.count} submissions divide by x. Check the zero case together before moving on.`
       : pending && !follow
@@ -879,4 +880,5 @@ try {
     tell(error.message);
   }
 }
+window.addEventListener("resize", () => paintProbe(state?.attempt));
 setInterval(refresh, 1500);

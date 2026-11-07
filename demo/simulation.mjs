@@ -1,5 +1,10 @@
 // These readings belong to the bundled notebook pages. Uploaded photos never use them.
 export const notebooks = {
+  slope: {
+    group: "power",
+    line: "f′(x)=2+x²",
+    hint: "Which term accounts for the slope difference?",
+  },
   divide: {
     group: "lost",
     line: "x² − x = 0 → divide by x → x − 1 = 0 → x = 1",
@@ -26,7 +31,7 @@ export function sampleClass() {
     { alias: "Sam", work: { notebook: "derivative" }, exampleTransfer: false },
     {
       alias: "Noor",
-      work: { text: "x² = x. I cancel x on both sides and get x=1." },
+      work: { notebook: "slope" },
       exampleTransfer: false,
     },
     {
