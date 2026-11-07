@@ -812,3 +812,17 @@ body.open-room { background: #f7f8fb; }
 .open-room .lobby {margin-top:24px;padding-block:28px;}
 .open-room .lobby h1 {font-size:21px;}
 .open-room .lobby p {margin-top:4px;color:var(--muted);}
+
+.room-host .report-sheet {max-width:840px;margin:14px 0;background:#fff;border:1px solid var(--line);border-radius:8px;padding:clamp(18px,4vw,40px);}
+.report-sheet header,.report-sheet section {border:0;border-bottom:1px solid var(--line);padding:0 0 18px;margin-bottom:20px;}
+.open-room .report-sheet h1 {font-size:clamp(23px,3vw,32px);margin:6px 0 12px;}
+.open-room .report-sheet h2 {font-size:17px;margin:0 0 8px;}
+.report-sheet .report-meta,.report-unclear {color:var(--muted);}
+.report-sheet .report-meta {font-size:14px;margin:0;}
+.report-sheet .report-question {font-size:18px;}
+.report-sheet blockquote {margin:12px 0 0;padding:3px 0 3px 14px;border-left:3px solid #c0c6d1;}
+.report-findings {list-style:none;padding:0;margin:0;}
+.report-findings li {display:flex;gap:12px;align-items:baseline;margin:5px 0;}
+.report-findings strong {min-width:1.4em;font-variant-numeric:tabular-nums;}
+.report-sheet details {border:0;border-top:1px solid var(--line);padding:10px 0;}
+.report-sheet details li {margin-bottom:12px;}

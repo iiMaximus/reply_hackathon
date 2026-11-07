@@ -145,12 +145,18 @@ function imageOf(r) {
     ? `<img class="question-image" src="${h(r.image)}" alt="Question material shared by the professor">`
     : "";
 }
+function mockButton(c) {
+  return btn(
+    "run-mock",
+    c.mockReport ? "View 10 mock answers" : "Run demo with 10 mock answers",
+  );
+}
 function reports(c) {
   const rows = [
     ...(c.active?.status === "closed" ? [c.active] : []),
     ...c.history,
   ];
-  return `<section class="side-section"><h2>${icon("list-checks")} Class reports</h2>${rows.map((r) => btn("report", r.topic || r.prompt, false, `data-id="${h(r.id)}"`)).join("")}${btn("report", "View example report", false, 'data-id="example"')}</section>`;
+  return `<section class="side-section"><h2>${icon("list-checks")} Class reports</h2>${rows.map((r) => btn("report", r.topic || r.prompt, false, `data-id="${h(r.id)}"`)).join("")}${btn("report", "View example report", false, 'data-id="example"')}${mockButton(c)}</section>`;
 }
 function home(c) {
   return (
@@ -248,32 +254,47 @@ function live(c) {
         : "Open for responses",
     ) +
     `<div class="columns"><section class="panel"><div class="question rich">${md(r.prompt)}</div>${imageOf(r)}${stats(s)}
-    <h2>Live reasoning patterns</h2>${breakdown(s)}<div class="actions">${btn("close", "Close and view report", true, r.status === "closing" ? "disabled" : "")}<span class="muted">${c.connected} student device${c.connected === 1 ? "" : "s"} connected</span></div></section>${invite()}</div>`
+    <h2>Live reasoning patterns</h2>${breakdown(s)}<div class="actions">${btn("close", "Close and view report", true, r.status === "closing" ? "disabled" : "")}<span class="muted">${c.connected} student device${c.connected === 1 ? "" : "s"} connected</span></div>${mockButton(c)}</section>${invite()}</div>`
   );
 }
-function teachingPlan(s) {
-  return `<section class="teaching-plan"><div class="plan-icon">${icon("presentation")}</div><div><h2>What to teach next</h2>
-    <h3>${math(s.practiceTopic || s.focus || "Review the class response")}</h3><p>${math(s.move || "Collect responses to see a suggested teaching step.")}</p></div></section>
-    ${s.boardExample || s.check ? `<div class="teaching-steps">${s.boardExample ? `<section><h3>Show on the board</h3><div class="rich">${md(s.boardExample)}</div></section>` : ""}${s.check ? `<section><h3>Check understanding</h3><div class="rich">${md(s.check)}</div><details><summary>Expected reasoning</summary>${md(s.expected)}</details></section>` : ""}</div>` : ""}`;
-}
 function report(r) {
+  const s = r.summary,
+    evidence = s.evidence || [],
+    synthetic = r.mock || r.id === "example";
+  const metadata = [
+    synthetic ? "Mock class" : "Class report",
+    `${s.total} ${s.total === 1 ? "response" : "responses"}`,
+  ];
+  if (s.accuracy?.assessed)
+    metadata.push(
+      `${s.accuracy.percent}% correct · ${s.accuracy.correct} of ${s.accuracy.assessed} assessed`,
+    );
+  const missing = s.unclear
+    ? `<p class="report-unclear">${s.unclear} ${s.unclear === 1 ? "response did" : "responses did"} not show enough working to identify a mistake.</p>`
+    : "";
+  const observation = evidence.length
+    ? `<ul class="report-findings">${evidence.map((e) => `<li><strong>${e.count}</strong><span>${math(e.error)}</span></li>`).join("")}</ul>`
+    : !missing
+      ? `<p>${s.reviewed ? "No specific error was identified in the reviewed answers." : "No responses were available for review."}</p>`
+      : "";
   return (
-    btn("back", "Back to questions") +
-    heading(
-      "Class report",
-      r.id === "example"
-        ? "Six synthetic responses with a sample teaching exercise."
-        : "Anonymous responses to the class question.",
+    btn(
+      "back",
+      state.classroom.active?.status === "open"
+        ? "Back to class"
+        : "Back to questions",
     ) +
-    teachingPlan(r.summary) +
-    `<section class="panel evidence-panel"><h2>Class evidence</h2><div class="report-metrics">${stats(r.summary)}${accuracyLine(r.summary.accuracy, "Class accuracy")}</div>
-    <div class="report-grid"><section><h3>Reasoning patterns</h3>${breakdown(r.summary)}</section><section><h3>Observed mistakes</h3>
-    ${r.summary.evidence?.length ? `<ul class="error-counts">${r.summary.evidence.map((e) => `<li><span>${math(e.error)}</span><strong>${e.count}</strong></li>`).join("")}</ul>` : "<p>No specific mistake was identified.</p>"}
-    ${r.summary.unclear ? `<p class="muted">${r.summary.unclear} ${r.summary.unclear === 1 ? "response needs" : "responses need"} more working to diagnose.</p>` : ""}</section></div>
-    <details data-preserve="report-question"><summary>Original question</summary><div class="rich">${md(r.prompt)}</div></details></section><div class="actions">${(state.classroom.active?.id === r.id && nextQuestion(state.classroom)) || btn("back", "Prepare another question", true)}</div>`
+    `<article class="report-sheet"><header><p class="report-meta">${metadata.map(h).join("　·　")}</p><h1>${math(r.topic || "Class report")}</h1><div class="rich report-question">${md(r.prompt)}</div></header>
+    <section><h2>What students struggled with</h2>${observation}${missing}</section>
+    ${s.reviewed ? `<section><h2>What to teach next</h2><p>${math(s.move)}</p>${s.boardExample ? `<blockquote class="rich">${md(s.boardExample)}</blockquote>` : ""}</section>` : ""}
+    ${s.check ? `<section><h2>Check understanding</h2><div class="rich">${md(s.check)}</div><details><summary>Expected reasoning</summary>${md(s.expected || "")}</details></section>` : ""}
+    ${r.mock ? `<details data-preserve="mock-answers"><summary>Read the 10 mock answers</summary><ol>${r.samples.map((sample) => `<li><p>${math(sample.text)}</p>${verdictBadge(sample.verdict)} <span>${math(sample.hint)}</span></li>`).join("")}</ol></details>` : ""}
+    <details data-preserve="summary-counts"><summary>All reasoning patterns</summary>${breakdown(s)}</details></article>
+    <div class="actions">${(state.classroom.active?.id === r.id && nextQuestion(state.classroom)) || btn("back", state.classroom.active?.status === "open" ? "Return to class" : "Prepare another question", true)}</div>`
   );
 }
 function teacher(c) {
+  if (screen === "mock-report" && c.mockReport) return report(c.mockReport);
   if (c.active && c.active.status !== "closed") return live(c);
   if (screen === "report") {
     const r =
@@ -598,6 +619,11 @@ async function act(b) {
   const a = b.dataset.actionOpen,
     c = state.classroom;
   error = "";
+  if (a === "run-mock")
+    return task("Preparing 10 mock answers", async () => {
+      await post("host/open/rehearse", {});
+      screen = "mock-report";
+    });
   if (a === "dismiss-notice") {
     notification = "";
     controls.draw();

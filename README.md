@@ -21,7 +21,7 @@ Use Node 22.16 or newer. Run `npm ci` and `npm start`. The server prints a priva
 
 For live Luna feedback and direct photo review, copy `.env.example` to `.env`, set the server-side `OPENAI_API_KEY` and restart. With no key, the local model supports text and course examples. For a deterministic rehearsal use `npm run demo`. On the hosted service the organizer holds the professor link.
 
-Upload the sample worksheet. Select one question, open several as one shared response, or release them one at a time. Preview Markdown and LaTeX before publishing. A student can type a step, draw on the whiteboard, or submit a photo. Private feedback labels the reasoning correct, incorrect or unassessed. My work shows the percentage correct across assessed questions saved on that browser. Close the question for a class report, a worked teaching example and a fresh check. **View example report** on the professor home page opens the saved synthetic class.
+Upload the sample worksheet. Select one question, open several as one shared response, or release them one at a time. Preview Markdown and LaTeX before publishing. A student can type a step, draw on the whiteboard, or submit a photo. Private feedback labels the reasoning correct, incorrect or unassessed. My work shows the percentage correct across assessed questions saved on that browser. Close the question for a class report, a worked teaching example and a fresh check. **Run demo with 10 mock answers** grades an isolated synthetic class for the [pitch question](submission/demo-question.png). **View example report** opens the saved six-response example.
 
 ## Evidence
 

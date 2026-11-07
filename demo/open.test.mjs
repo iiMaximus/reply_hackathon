@@ -227,3 +227,72 @@ test("local whiteboard submissions remain private and unassessed when vision is 
   assert.ok(room.workPhoto(person, receipt.photo.split("/").pop()));
   assert.equal(room.student({}).receipt, null);
 });
+
+test("French feedback is rewritten in English without changing the assessment", async () => {
+  const calls = [];
+  const room = openClassroom({
+    cloud: {
+      enabled: true,
+      model: "test",
+      async ask(task) {
+        calls.push(task);
+        if (task === "feedback_language")
+          return {
+            feedback: "Show how you evaluated each term.",
+            practice: "Write each substituted term before simplifying.",
+            diagnosis: "",
+          };
+        return {
+          alignment: "unclear",
+          group: -1,
+          evidence: "42",
+          feedback:
+            "Il manque le travail qui montre comment tu as évalué chaque terme du polynôme.",
+          practice:
+            "Écris la substitution de chaque terme avant de simplifier.",
+          diagnosis: "",
+        };
+      },
+    },
+  });
+  await room.analyze({ sample: 0 });
+  await room.publish(room.host().draft);
+  const person = {};
+  await room.answer(person, { id: room.board().id, text: "42" });
+  assert.deepEqual(calls, ["open_feedback", "feedback_language"]);
+  assert.equal(
+    room.student(person).receipt.result.hint,
+    "Show how you evaluated each term.",
+  );
+  assert.equal(room.student(person).receipt.result.verdict, "unassessed");
+});
+
+test("ten mock answers produce one reusable report and leave the real class alone", async () => {
+  const room = openClassroom({ cloud: { enabled: false } });
+  await room.analyze({ sample: 0 });
+  await room.publish(room.host().draft);
+  const original = room.board();
+  await Promise.all([room.rehearse(), room.rehearse()]);
+  assert.deepEqual(room.board(), original);
+  const report = room.host().mockReport;
+  assert.equal(report.summary.total, 10);
+  assert.equal(report.summary.reviewed, 10);
+  assert.equal(report.samples.length, 10);
+  assert.ok(report.mock);
+  assert.deepEqual(room.student({}).standings, []);
+  assert.equal(room.host().history.length, 0);
+  await room.rehearse();
+  assert.equal(room.host().mockReport.id, report.id);
+});
+
+test("the report corrects a Spanish teaching move before showing it to an English classroom",async()=>{
+ const room=openClassroom({cloud:{enabled:true,model:"test",async ask(task){
+   if(task==="open_feedback") return {alignment:"consistent",group:0,evidence:"cubic factors",feedback:"The cubic factors cancel.",practice:"Change only the length.",diagnosis:""};
+   if(task==="open_report")return {focus:"",move:"Pida al grupo que sustituya 2 en cada término y calcule el valor.",boardExample:"Por continuidad, sustituir el valor.",check:"Evalúe el límite.",expected:"El resultado es positivo."};
+   assert.equal(task,"report_language");
+   return {focus:"",move:"Ask the class to substitute two into each term.",boardExample:"Substitute two.",check:"Try a new input.",expected:"The result is positive."};
+ }}});
+ await room.analyze({sample:0});await room.publish(room.host().draft);const {id}=room.board();
+ await room.answer({}, {id,text:"Both cubic factors cancel."});await room.close(id);
+ assert.equal(room.host().active.summary.move,"Ask the class to substitute two into each term.");
+});

@@ -549,7 +549,8 @@ async function handle(req, res) {
         return json(res, {
           questions: await extractWorksheetImage(input, cloud),
         });
-      if (path === "/api/host/open/analyze") await classroom.analyze(input);
+      if (path === "/api/host/open/rehearse") await classroom.rehearse();
+      else if (path === "/api/host/open/analyze") await classroom.analyze(input);
       else if (path === "/api/host/open/publish")
         await classroom.publish(input);
       else if (path === "/api/host/open/close") await classroom.close(input.id);
