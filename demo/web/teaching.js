@@ -66,11 +66,16 @@ let aliasInput = "",
   rememberedAlias = null,
   restoringAlias = false;
 try {
-  rememberedAlias = localStorage.getItem("showwork-alias");
+  // The demo room was reset. Retire only its previous browser records.
+  localStorage.removeItem("showwork-alias");
+  localStorage.removeItem("showwork-progress");
+  rememberedAlias = localStorage.getItem("qai-classroom-alias");
 } catch {}
 
 try {
-  const data = JSON.parse(localStorage.getItem("showwork-progress") || "[]");
+  const data = JSON.parse(
+    localStorage.getItem("qai-classroom-progress") || "[]",
+  );
   if (Array.isArray(data)) saved = data.slice(0, 40);
 } catch {}
 function loading() {
@@ -139,17 +144,14 @@ function reports(c) {
 }
 function home(c) {
   return (
-    heading(
-      "Prepare a question",
-      "Use a question from your course. You can review it before students see it.",
-    ) +
-    `<div class="columns"><section class="panel"><h2>Upload a question</h2><div class="upload-area">
+    `<div class="desk-heading">${heading("Prepare a question", "Choose the exercise you want to discuss in class.")}<a class="project-link" href="/board" target="_blank" rel="noopener">${icon("presentation")} Open projector</a></div>` +
+    `<div class="columns"><section class="panel composer"><h2>Course material</h2><div class="upload-area" data-drop-material><span class="upload-symbol" aria-hidden="true">${icon("upload")}</span><strong>Drop your worksheet here</strong>
     ${picker("open-file", "Choose a photo or worksheet", ".jpg,.jpeg,.png,.webp,.pdf,.txt,.md")}
     <span class="muted">JPG, PNG, WebP, PDF or text · up to 16 MB</span></div>
     <div class="or"><span>or paste the question</span></div>
     <label class="sr-only" for="open-source">Question text</label><textarea id="open-source" rows="4" maxlength="5000" placeholder="Paste one open question here.">${h(source)}</textarea><div class="actions">${btn("analyze", "Review question", true, source.trim().length < 8 ? "disabled" : "")}</div>
     ${c.draft ? btn("resume", "Continue with saved draft") : ""}</section>
-    <aside>${nextQuestion(c)}<section class="side-section"><h2>Course examples</h2>${c.examples.map((name, i) => btn("sample", name, false, `data-index="${i}"`)).join("")}</section>${reports(c)}</aside></div>`
+    <aside class="desk-library">${nextQuestion(c)}<section class="side-section"><h2>Course examples</h2>${c.examples.map((name, i) => btn("sample", name, false, `data-index="${i}"`)).join("")}</section>${reports(c)}</aside></div>`
   );
 }
 function uploadView() {
@@ -251,6 +253,11 @@ function live(c) {
     <h2>Live reasoning patterns</h2>${breakdown(s)}<div class="actions">${btn("close", "Close and view report", true, r.status === "closing" ? "disabled" : "")}<span class="muted">${c.connected} student device${c.connected === 1 ? "" : "s"} connected</span></div></section>${invite()}</div>`
   );
 }
+function teachingPlan(s) {
+  return `<section class="teaching-plan"><div class="plan-icon">${icon("presentation")}</div><div><h2>What to teach next</h2>
+    <h3>${math(s.practiceTopic || s.focus || "Review the class response")}</h3><p>${math(s.move || "Collect responses to see a suggested teaching step.")}</p></div></section>
+    ${s.boardExample || s.check ? `<div class="teaching-steps">${s.boardExample ? `<section><h3>Show on the board</h3><div class="rich">${md(s.boardExample)}</div></section>` : ""}${s.check ? `<section><h3>Check understanding</h3><div class="rich">${md(s.check)}</div><details><summary>Expected reasoning</summary>${md(s.expected)}</details></section>` : ""}</div>` : ""}`;
+}
 function report(r) {
   return (
     btn("back", "Back to questions") +
@@ -260,12 +267,12 @@ function report(r) {
         ? "Six synthetic responses with a sample teaching exercise."
         : "Anonymous responses to the class question.",
     ) +
-    `<section class="panel"><div class="question rich">${md(r.prompt)}</div>${stats(r.summary)}${accuracyLine(r.summary.accuracy, "Class accuracy")}<div class="report-grid"><section><h2>Reasoning patterns</h2>${breakdown(r.summary)}
-    ${r.summary.evidence?.length ? `<h3>Observed mistakes</h3><ul>${r.summary.evidence.map((entry) => `<li>${math(entry.error)} <strong>(${entry.count})</strong></li>`).join("")}</ul>` : ""}
-    ${r.summary.unclear ? `<p>${r.summary.unclear} response(s) had too little evidence to diagnose.</p>` : ""}</section>
-    <section><h2>${icon("presentation")} What to teach next</h2>${r.summary.practiceTopic ? `<h3 class="focus-topic">${icon("target")} ${math(r.summary.practiceTopic)}</h3>` : ""}<p>${math(r.summary.move || "There are no responses to interpret.")}</p>${r.summary.boardExample ? `<h3>Show on the board</h3><div class="rich">${md(r.summary.boardExample)}</div>` : ""}
-    ${r.summary.check ? `<h3>Check understanding</h3><div class="rich">${md(r.summary.check)}</div><details><summary>Expected reasoning</summary>${md(r.summary.expected)}</details>` : ""}
-    ${r.summary.engine ? `<small>${h(r.summary.engine)}</small>` : ""}</section></div></section><div class="actions">${(state.classroom.active?.id === r.id && nextQuestion(state.classroom)) || btn("back", "Prepare another question", true)}</div>`
+    teachingPlan(r.summary) +
+    `<section class="panel evidence-panel"><h2>Class evidence</h2><div class="report-metrics">${stats(r.summary)}${accuracyLine(r.summary.accuracy, "Class accuracy")}</div>
+    <div class="report-grid"><section><h3>Reasoning patterns</h3>${breakdown(r.summary)}</section><section><h3>Observed mistakes</h3>
+    ${r.summary.evidence?.length ? `<ul class="error-counts">${r.summary.evidence.map((e) => `<li><span>${math(e.error)}</span><strong>${e.count}</strong></li>`).join("")}</ul>` : "<p>No specific mistake was identified.</p>"}
+    ${r.summary.unclear ? `<p class="muted">${r.summary.unclear} ${r.summary.unclear === 1 ? "response needs" : "responses need"} more working to diagnose.</p>` : ""}</section></div>
+    <details data-preserve="report-question"><summary>Original question</summary><div class="rich">${md(r.prompt)}</div></details></section><div class="actions">${(state.classroom.active?.id === r.id && nextQuestion(state.classroom)) || btn("back", "Prepare another question", true)}</div>`
   );
 }
 function teacher(c) {
@@ -303,7 +310,7 @@ function remember(r, v) {
     return;
   saved = [row, ...saved.filter((x) => x.id !== r.id)].slice(0, 40);
   try {
-    localStorage.setItem("showwork-progress", JSON.stringify(saved));
+    localStorage.setItem("qai-classroom-progress", JSON.stringify(saved));
   } catch {}
 }
 function accuracyLine(value, label) {
@@ -361,7 +368,7 @@ function student(c) {
           rememberedAlias = null;
           error = err.message;
           try {
-            localStorage.removeItem("showwork-alias");
+            localStorage.removeItem("qai-classroom-alias");
           } catch {}
         } finally {
           restoringAlias = false;
@@ -388,7 +395,7 @@ function student(c) {
           ? c.standings
               .map((player, i, rows) => {
                 if (!i || rows[i - 1].points !== player.points) rank = i + 1;
-                return `<div class="standing"><span>${rank}. ${h(player.alias)}${player.alias === c.nickname ? " (you)" : ""}</span><strong>${player.points} pt</strong></div>`;
+                return `<div class="standing ${player.alias === c.nickname ? "is-you" : ""}"><span class="rank">${rank}</span><span>${h(player.alias)}${player.alias === c.nickname ? " (you)" : ""}</span><strong>${player.points} pt</strong></div>`;
               })
               .join("")
           : "<p>The first named participant to answer will appear here.</p>"
@@ -428,8 +435,8 @@ function student(c) {
     ) +
     `<section class="panel"><div class="question rich">${md(r.prompt)}</div>${imageOf(r)}`;
   if (v && (!editing || r.status !== "open")) {
-    html += `<div class="sent-badge">${icon("circle-check")} Response submitted</div><h2>Your response</h2><p class="written">${math(v.text)}</p>${v.photo ? `<img class="question-image" src="${h(v.photo)}" alt="Your submitted working">` : ""}<div class="feedback"><h2>Private feedback</h2>${feedback(v.result)}${v.result ? accuracyLine(accuracy(saved), "Your saved questions") : ""}
-    ${v.result ? `<small>${h(v.result.engine)}</small>` : ""}</div>
+    html += `<div class="sent-badge">${icon("circle-check")} Response submitted</div><div class="feedback"><h2>Private feedback</h2>${feedback(v.result)}${v.result ? accuracyLine(accuracy(saved), "Your saved questions") : ""}</div>
+    <details class="submitted-work" data-preserve="student-work"><summary>Your submitted work</summary><p class="written">${math(v.text)}</p>${v.photo ? `<img class="question-image" src="${h(v.photo)}" alt="Your submitted working">` : ""}</details>
     ${r.status === "open" && v.result ? btn("revise", "Revise response") : ""}`;
   } else if (r.status === "open") {
     html +=
@@ -636,7 +643,7 @@ async function act(b) {
       await post("open/nickname", { alias: value });
       rememberedAlias = value;
       try {
-        localStorage.setItem("showwork-alias", value);
+        localStorage.setItem("qai-classroom-alias", value);
       } catch {}
     });
   }
@@ -784,3 +791,16 @@ document.addEventListener("change", (e) => {
     });
   }
 });
+
+for (const type of ["dragover", "dragleave", "drop"]) {
+  document.addEventListener(type, (event) => {
+    const zone = event.target.closest?.("[data-drop-material]");
+    if (!zone) return;
+    event.preventDefault();
+    zone.classList.toggle("dragging", type === "dragover");
+    if (type === "drop" && !pending && event.dataTransfer.files.length) {
+      const file = event.dataTransfer.files[0];
+      void task("Opening " + file.name, () => fileChosen(file));
+    }
+  });
+}

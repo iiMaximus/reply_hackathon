@@ -100,7 +100,7 @@ test(
       { notebook: "divide", share: true },
       first,
     );
-    assert.match(reply.cookie, /^demo_practice=v1\.lost\./);
+    assert.match(reply.cookie, /^qai_demo_practice=v1\.lost\./);
     const second = (await api("join", { direct: true }, reply.cookie)).cookie;
     const later = await api(
       "attempt",
