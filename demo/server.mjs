@@ -3,6 +3,8 @@ import { createHash, randomBytes } from "node:crypto";
 import { networkInterfaces } from "node:os";
 import { readFile } from "node:fs/promises";
 import QRCode from "qrcode";
+import { createTeachingRoom } from "./quiz/room.mjs";
+import { cloudClient } from "./quiz/agent.mjs";
 import { forecast } from "./analysis.mjs";
 import { runAgent } from "./agent/orchestrator.mjs";
 import { rehearsalPlanner, openAIPlanner } from "./agent/providers.mjs";
@@ -31,6 +33,14 @@ if (liveClass && !simulated && !process.env.OPENAI_API_KEY) {
     "Live classroom needs OPENAI_API_KEY. For the offline simulation use npm run demo.",
   );
 }
+const teaching = createTeachingRoom({
+  match: strategyMatcher,
+  cloud: cloudClient({
+    enabled:
+      Boolean(process.env.OPENAI_API_KEY) &&
+      !process.argv.includes("--simulate"),
+  }),
+});
 const port = Number(
   pilot
     ? (process.env.POC_PORT ?? 4174)
@@ -83,6 +93,11 @@ const files = {
   "/": [new URL("index.html", web), "text/html; charset=utf-8"],
   "/present": [new URL("index.html", web), "text/html; charset=utf-8"],
   "/board": [new URL("index.html", web), "text/html; charset=utf-8"],
+  "/teaching.js": [
+    new URL("teaching.js", web),
+    "text/javascript; charset=utf-8",
+  ],
+  "/teaching.css": [new URL("teaching.css", web), "text/css; charset=utf-8"],
   "/lens.js": [new URL("lens.js", web), "text/javascript; charset=utf-8"],
   "/app.js": [new URL("app.js", web), "text/javascript; charset=utf-8"],
   "/style.css": [new URL("style.css", web), "text/css; charset=utf-8"],
@@ -113,6 +128,24 @@ function fail(status, message) {
   throw Object.assign(new Error(message), { status });
 }
 function json(res, data) {
+  // The quiz clients have their own contract. Notebook excerpts, aliases, and photos
+  // are never included in the teacher, student, or projector quiz payloads.
+  if (res.quizView && data.showcase) {
+    const keys = [
+      "room",
+      "showcase",
+      "round",
+      "join",
+      "teaching",
+      "quiz",
+      "quizPractice",
+    ];
+    data = Object.fromEntries(
+      keys
+        .filter((key) => Object.hasOwn(data, key))
+        .map((key) => [key, data[key]]),
+    );
+  }
   res.writeHead(200, {
     "Content-Type": "application/json",
     "Cache-Control": "no-store",
@@ -138,14 +171,15 @@ function setCookie(res, name, value, maxAge = 0) {
       (origin.startsWith("https:") ? "; Secure" : ""),
   );
 }
-async function body(req) {
+async function body(req, limit = 2800000) {
   if (!req.headers["content-type"]?.startsWith("application/json"))
     fail(415, "Use a JSON request.");
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 2800000) fail(413, "Choose a smaller photo.");
+    if (size > limit)
+      fail(413, "The file is too large. Choose a smaller file.");
     chunks.push(chunk);
   }
   try {
@@ -193,6 +227,7 @@ function dashboard() {
     examples: examples.size,
     live,
     canLive: !simulated && Boolean(process.env.OPENAI_API_KEY),
+    ...(showcase ? { teaching: teaching.host() } : {}),
     audienceScored: [...people.values()].filter((p) => p.scored).length,
     audienceCorrect: [...people.values()].filter((p) => p.scored?.point).length,
     count: submitted.length,
@@ -238,6 +273,9 @@ function studentView(p) {
     engine: localAI ? "local" : live ? "openai" : "scripted",
     round,
     lesson: studentLesson(),
+    ...(showcase
+      ? { quiz: teaching.student(p), quizPractice: teaching.practice(p) }
+      : {}),
     practice: practiceFor(p.attempt?.group),
     challenge: publicVariant(challenge),
     live,
@@ -252,6 +290,7 @@ function studentView(p) {
 async function handle(req, res) {
   const url = new URL(req.url, "http://localhost");
   const path = url.pathname;
+  res.quizView = url.searchParams.get("view") === "quiz";
   if (path === "/health" && req.method === "GET")
     return json(res, { ok: true });
   if (
@@ -271,7 +310,14 @@ async function handle(req, res) {
   }
   if (req.method === "GET" && path === "/qr.png") {
     res.setHeader("Content-Type", "image/png");
-    res.end(await QRCode.toBuffer(join, { width: 260, margin: 4 }));
+    res.end(
+      await QRCode.toBuffer(
+        showcase && url.searchParams.get("view") === "notebook"
+          ? join + "?view=notebook"
+          : join,
+        { width: 260, margin: 4 },
+      ),
+    );
     return;
   }
   if (req.method === "GET" && path === "/api/board") {
@@ -288,6 +334,7 @@ async function handle(req, res) {
       engine: localAI ? "local" : live ? "openai" : "scripted",
       round,
       examples: examples.size,
+      ...(showcase ? { quiz: teaching.board() } : {}),
       lesson: studentLesson(),
       count,
       challenge: publicVariant(challenge),
@@ -327,6 +374,14 @@ async function handle(req, res) {
     if (path === "/api/host/state" && req.method === "GET")
       return json(res, dashboard());
     if (req.method !== "POST") fail(405, "Unsupported action.");
+    if (showcase && path.startsWith("/api/host/quiz/")) {
+      const input = await body(req, 5700000);
+      if (path === "/api/host/quiz/analyze") await teaching.analyze(input);
+      else if (path === "/api/host/quiz/publish") teaching.publish(input);
+      else if (path === "/api/host/quiz/close") await teaching.close(input.id);
+      else fail(404, "Unknown classroom action.");
+      return json(res, dashboard());
+    }
     const input = await body(req);
     if (pilot && path !== "/api/host/correct")
       fail(404, "This room is for sharing one step.");
@@ -407,7 +462,7 @@ async function handle(req, res) {
         "Scan the room code on the projector or enter the six characters.",
       );
     if (!p) {
-      if (people.size >= (pilot ? 20 : showcase ? 100 : 300))
+      if (people.size >= (pilot ? 20 : 300))
         fail(429, "This demo room is full.");
       const token = randomBytes(20).toString("hex");
       p = {
@@ -433,6 +488,14 @@ async function handle(req, res) {
     fail(409, "The tutor started a new round. Refresh and try again.");
   if (pilot && path !== "/api/attempt")
     fail(404, "This room is for sharing one step.");
+  if (showcase && path === "/api/quiz/practice") {
+    teaching.practiceVote(p, input);
+    return json(res, studentView(p));
+  }
+  if (showcase && path === "/api/quiz/vote") {
+    teaching.vote(p, input);
+    return json(res, studentView(p));
+  }
   if (path === "/api/attempt") {
     const text =
       typeof input.text === "string" ? input.text.trim().slice(0, 1500) : "";

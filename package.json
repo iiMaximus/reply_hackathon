@@ -10,7 +10,7 @@
     "live": "node --env-file-if-exists=.env demo/server.mjs --live",
     "test": "node --test demo/*.test.mjs",
     "model:prepare": "node demo/model/prepare.mjs",
-    "classroom": "node demo/server.mjs --local-ai",
+    "classroom": "node --env-file-if-exists=.env demo/server.mjs --local-ai",
     "test:model": "node demo/model/evaluate.mjs"
   },
   "engines": {
@@ -21,6 +21,7 @@
     "@fontsource/instrument-serif": "^5.2.0",
     "@huggingface/tokenizers": "0.2.0",
     "onnxruntime-web": "1.22.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "unpdf": "1.9.1"
   }
 }

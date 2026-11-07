@@ -316,3 +316,89 @@ test(
     );
   },
 );
+
+test("a professor reviews an imported question, phones vote privately, and the projector only sees turnout", async (t) => {
+  const { api, secret } = await startRoom(t, "--simulate");
+  const view = "?view=quiz";
+  assert.equal(
+    (await api("host/quiz/analyze" + view, { sample: 0 })).status,
+    403,
+  );
+  const host = (await api("host", { secret })).cookie;
+  const a = (await api("join" + view, { direct: true })).cookie;
+  const b = (await api("join" + view, { direct: true })).cookie;
+  const data = {
+    text: "How many zeros does x² − 1 have?\nA. One\nB. Two\nKey: B\nExplanation: Both +1 and −1 satisfy the equation.",
+  };
+  const draft = (await api("host/quiz/analyze" + view, data, host)).value
+    .teaching.draft;
+  assert.equal(draft.question.key, 1);
+  assert.equal(draft.question.prompt, "How many zeros does x² − 1 have?");
+  assert.equal((await api("state" + view, undefined, a)).value.quiz, null);
+  const beam = (await api("host/quiz/analyze" + view, { sample: 0 }, host))
+    .value.teaching.draft;
+  assert.equal(
+    (
+      await api(
+        "host/quiz/publish" + view,
+        { id: draft.id, question: draft.question },
+        host,
+      )
+    ).status,
+    409,
+  );
+  const publish = { id: beam.id, question: beam.question };
+  const id = (await api("host/quiz/publish" + view, publish, host)).value
+    .teaching.active.id;
+  const board = (await api("board" + view)).value;
+  assert.equal(board.quiz.id, id);
+  for (const field of ["key", "reasonKey", "explanation", "correct", "receipt"])
+    assert.ok(!(field in board.quiz));
+  assert.ok(!("board" in board));
+  const attempt = { id, answer: 0, reason: 1 };
+  const reply = (await api("quiz/vote" + view, attempt, a)).value.quiz.receipt;
+  assert.equal(reply.right, true);
+  assert.equal(reply.reasonRight, false);
+  assert.deepEqual(
+    (await api("quiz/vote" + view, { id, answer: 2, reason: 0 }, a)).value.quiz
+      .receipt,
+    reply,
+  );
+  assert.equal(
+    (await api("state" + view, undefined, b)).value.quiz.receipt,
+    null,
+  );
+  await api("quiz/vote" + view, { id, answer: 2 }, b);
+  assert.equal((await api("board" + view)).value.quiz.total, 2);
+  const responses = await Promise.all(
+    [1, 2].map(() => api("host/quiz/close" + view, { id }, host)),
+  );
+  for (const r of responses) {
+    assert.equal(r.status, 200);
+    assert.deepEqual(Object.keys(r.value).sort(), [
+      "join",
+      "room",
+      "round",
+      "showcase",
+      "teaching",
+    ]);
+    const report = r.value.teaching.active.report;
+    assert.deepEqual(report.counts, [1, 0, 1, 0]);
+    assert.equal(report.split, 1);
+    assert.equal(report.explained, 1);
+    assert.ok(!JSON.stringify(report).includes(a.split("=")[1]));
+    assert.ok(!("votes" in report));
+  }
+  const again = (await api("host/quiz/analyze" + view, data, host)).value
+    .teaching.draft;
+  const next = (
+    await api(
+      "host/quiz/publish" + view,
+      { id: again.id, question: again.question },
+      host,
+    )
+  ).value.teaching;
+  assert.equal(next.history[0].id, id);
+  assert.equal(next.active.total, 0);
+  assert.equal((await api("quiz/vote" + view, attempt, b)).status, 409);
+});

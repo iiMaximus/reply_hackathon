@@ -72,7 +72,7 @@ async function loadEncoder() {
   const refs = [];
   for (const [group, lines] of Object.entries(anchors))
     for (const line of lines) refs.push({ group, vector: await encode(line) });
-  return async (text) => {
+  async function classify(text) {
     const vector = await encode(text);
     const scores = new Map();
     for (const ref of refs) {
@@ -87,7 +87,23 @@ async function loadEncoder() {
       strategy: accepted ? group : "unclear",
       nearest: group,
     };
-  };
+  }
+  const conceptVectors = new Map();
+  async function rank(text, references) {
+    const vector = await encode(text);
+    const scores = [];
+    for (const [index, reference] of references.entries()) {
+      if (!conceptVectors.has(reference))
+        conceptVectors.set(reference, await encode(reference));
+      const ref = conceptVectors.get(reference);
+      scores.push({
+        index,
+        score: vector.reduce((sum, v, i) => sum + v * ref[i], 0),
+      });
+    }
+    return scores.sort((a, b) => b.score - a.score);
+  }
+  return { classify, rank };
 }
 let encoder;
 export async function createStrategyMatcher() {
@@ -95,9 +111,12 @@ export async function createStrategyMatcher() {
   const infer = await encoder;
   // Serial inference bounds WASM memory for an audience submitting together.
   let queue = Promise.resolve();
-  return (text) => {
-    const result = queue.then(() => infer(text));
+  function serial(operation) {
+    const result = queue.then(operation);
     queue = result.catch(() => {});
     return result;
-  };
+  }
+  const match = (text) => serial(() => infer.classify(text));
+  match.rank = (text, references) => serial(() => infer.rank(text, references));
+  return match;
 }

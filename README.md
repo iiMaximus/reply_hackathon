@@ -6,9 +6,9 @@ Reply Student Tech Clash 2026 · AI on Campus
 
 [Join the deployed classroom](https://solution-room-demo.onrender.com/join) · [Open the projector](https://solution-room-demo.onrender.com/board) · [Agent architecture, examples and evaluation](demo/README.md#how-the-classroom-agent-works)
 
-The public classroom runs a local MiniLM sentence encoder and a mathematical checking tool without an API key. Try `f′(x)=2+x²`. The agent selects a test point, compares the proposed tangent to the original curve, shows the mismatch, and recommends a fresh problem to the tutor. The notebook displays the tools that actually ran. Six labeled example attempts are ready for presenting; audience work drives the next question when people join.
+A professor uploads one tutorial question, checks the proposed answer and opens voting by QR. Students choose an answer and optionally a reason, get private feedback, and keep a study history on their phone. When voting closes, the professor sees counts, where reasoning diverged, and what to put on the board next. Try **Mechanics · Beam deflection** in the teaching desk to see students arrive at the same answer using different rules.
 
-**[Run or rehearse the demo](demo/README.md#play-the-public-ai-classroom).** Use `npm run model:prepare` and `npm run classroom` for the local AI; `npm run demo` for the scripted fallback; or `npm run live` with an OpenAI key for generative planning and photo interpretation.
+**[Run the teaching desk or rehearse the vote](demo/README.md#run-a-classroom-question).** The public classroom uses MiniLM and reviewed course material without a key. Configure a server-side OpenAI key to generate new questions and analyze anonymous responses with GPT-6 Luna. The optional [worked-step notebook](https://solution-room-demo.onrender.com/join?view=notebook) runs the original mathematical checking agent.
 
 **[Try the one-exercise proof of concept first](demo/README.md#start-with-the-proof-of-concept).** Run `npm run poc`. Students send an unfinished step from their phones and a tutor decides what to explain from the incoming work. The guide includes a five-minute classroom test and a criterion for trying a second session.
 

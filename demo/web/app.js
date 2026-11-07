@@ -1,4 +1,7 @@
 import { lensPanel, paintProbe, selectX, agentRecord } from "/lens.js";
+import { paintTeaching, teachingBusy } from "/teaching.js";
+const notebookView =
+  new URLSearchParams(location.search).get("view") === "notebook";
 const app = document.querySelector("#app");
 const notice = document.querySelector("#notice");
 const host = location.pathname === "/present";
@@ -39,6 +42,7 @@ async function api(path, data) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         };
+  if (!notebookView) path += (path.includes("?") ? "&" : "?") + "view=quiz";
   const response = await fetch("/api/" + path, options);
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || "Try again.");
@@ -78,7 +82,7 @@ function hostView() {
   const prediction = state.prediction;
   app.innerHTML = `<div class="head spread"><div><p class="eyebrow">Professor’s view</p><h1>The classroom</h1></div>${chip(state.live ? "Live AI" : "Rehearsal mode", !state.live)}</div>
     <div class="grid"><div class="stack">${problem()}<section class="card"><div class="spread"><div><p class="eyebrow">From submitted work</p><h2>Steps around the room</h2></div><div class="total">${state.count}</div></div><p class="small">${state.count} submitted · ${state.joined} joined. Revisions replace the student’s earlier step.</p>${groups}${state.fallbackCount ? `<p class="small">${state.fallbackCount} current review(s) used rehearsal feedback.</p>` : ""}</section></div>
-    <div class="stack"><section class="card"><div class="row"><img class="qr" src="/qr.png" alt="Scan to join the classroom"><div><p class="eyebrow">Join from a phone</p><p class="mono">${esc(state.room)}</p><a class="joinurl" href="${esc(state.join)}" target="_blank" rel="noopener">Student link ↗</a><br><a class="joinurl" href="/board?room=${esc(state.room)}" target="_blank" rel="noopener">Open projector view ↗</a></div></div></section>
+    <div class="stack"><section class="card"><div class="row"><img class="qr" src="/qr.png" alt="Scan to join the classroom"><div><p class="eyebrow">Join from a phone</p><p class="mono">${esc(state.room)}</p><a class="joinurl" href="${esc(state.join + (notebookView ? "?view=notebook" : ""))}" target="_blank" rel="noopener">Student link ↗</a><br><a class="joinurl" href="/board?room=${esc(state.room)}" target="_blank" rel="noopener">Open projector view ↗</a></div></div></section>
     <section class="card"><p class="eyebrow">Before the exercise</p><h2>What to watch for</h2>
     ${prediction ? `<p class="small">${prediction.mode === "live" ? "AI suggestions" : "Prepared rehearsal examples"} · hypotheses only</p>${prediction.items.map((i) => `<div class="predict"><b>${esc(i.mistake)}</b><p>${esc(i.signal)}</p><p class="small">Ask “${esc(i.question)}”</p></div>`).join("")}` : '<p class="small">Preview possible mistakes and a question to ask if one shows up.</p><button data-action="forecast">Suggest likely mistakes</button>'}</section>
     <section class="card lavender"><p class="eyebrow">Fresh challenge</p><h2>${esc((state.challenge || state.suggested)?.title || "Waiting for a clear step")}</h2><p>${esc((state.challenge || state.suggested)?.prompt || "")}</p>${state.challenge ? chip("Open on student screens") : '<button class="primary" data-action="release">Open challenge for everyone →</button>'}</section>
@@ -308,9 +312,9 @@ function groupRow(group, open) {
 
 function joinPanel() {
   return `<aside class="invite-panel"><div class="panel-heading"><h2>Invite students</h2>${icon("people")}</div>
-    <img class="invite-qr" src="/qr.png" alt="Scan to join the exercise"><span class="qr-code">${state.showcase ? "Scan to join" : "Room " + esc(state.room)}</span>
+    <img class="invite-qr" src="/qr.png${notebookView ? "?view=notebook" : ""}" alt="Scan to join the exercise"><span class="qr-code">${state.showcase ? "Scan to join" : "Room " + esc(state.room)}</span>
     <button class="copy-action" data-pilot="copy">${icon("link")} Copy student link</button>
-    <a class="open-student" href="${esc(state.join)}" target="_blank" rel="noopener">Open student view ↗</a></aside>`;
+    <a class="open-student" href="${esc(state.join + (notebookView ? "?view=notebook" : ""))}" target="_blank" rel="noopener">Open student view ↗</a></aside>`;
 }
 function studentShowcase(exerciseAndAttempt) {
   const nav = `<nav class="tabs show-tabs" aria-label="Student views">${["Class", "Study", "Standings"].map((t) => `<button data-tab="${t}" aria-current="${t === tab}">${t}</button>`).join("")}</nav>`;
@@ -395,7 +399,7 @@ function pilotView() {
   const opened = expandedGroup ?? groups[0]?.id;
   app.className = "pilot tutor-pilot";
   app.innerHTML = `<div class="tutor-title"><div><p class="section-meta"><span class="live-dot"></span><span data-connection>Room open</span> · ${esc(state.lesson.course)}</p><h1>Class responses</h1></div>
-    <a class="project-action" href="${state.showcase ? "/board" : "/board?room=" + esc(state.room)}" target="_blank" rel="noopener">${icon("screen")} Project exercise <span>↗</span></a></div>
+    <a class="project-action" href="${state.showcase ? "/board?view=notebook" : "/board?room=" + esc(state.room)}" target="_blank" rel="noopener">${icon("screen")} Project exercise <span>↗</span></a></div>
     <div class="tutor-layout"><div class="tutor-main">${exerciseCard()}${state.showcase ? nextMove() : ""}
       <section class="responses"><div class="response-title"><h2>Student steps</h2><span>${state.simulated ? `${state.count - state.examples} audience · ${state.examples} prepared` : `${state.count} sent · ${state.joined} joined`}</span></div>
         ${
@@ -411,7 +415,7 @@ function projectorView() {
   roomHeader("Class screen", state.room);
   app.className = "pilot projection";
   app.innerHTML = `<div class="project-layout">${exerciseCard()}<aside class="invite-panel"><h2>Join the exercise</h2>
-    <img class="invite-qr" src="/qr.png" alt="Scan to join the exercise"><span class="qr-code">${state.showcase ? "Scan to join" : "Room " + esc(state.room)}</span>
+    <img class="invite-qr" src="/qr.png${notebookView ? "?view=notebook" : ""}" alt="Scan to join the exercise"><span class="qr-code">${state.showcase ? "Scan to join" : "Room " + esc(state.room)}</span>
     <p>${state.simulated ? `${state.count - state.examples} audience · ${state.examples} prepared` : `${state.count} steps received`}</p></aside></div>
     ${state.challenge ? `<section class="card lavender"><h2>${esc(state.challenge.title)}</h2><p>${esc(state.challenge.prompt)}</p></section><section class="card"><h2>Standings</h2>${board()}</section>` : ""}`;
 }
@@ -420,7 +424,20 @@ function render() {
   const openPanels = [
     ...app.querySelectorAll("details[data-preserve][open]"),
   ].map((el) => el.dataset.preserve);
-  if (state.pilot && !projection) pilotView();
+  if (state.showcase && !notebookView) {
+    paintTeaching(
+      app,
+      state,
+      host ? "host" : projection ? "board" : "student",
+      {
+        api,
+        draw: render,
+        set: (next) => {
+          state = next;
+        },
+      },
+    );
+  } else if (state.pilot && !projection) pilotView();
   else if (host) hostView();
   else if (projection) projectorView();
   else studentView();
@@ -442,7 +459,9 @@ async function join(code, direct = false) {
   history.replaceState(
     null,
     "",
-    state.showcase || direct ? "/join" : "/?room=" + roomCode,
+    state.showcase || direct
+      ? "/join" + (notebookView ? "?view=notebook" : "")
+      : "/?room=" + roomCode,
   );
   aliasDraft = state.alias;
   sharing = state.share;
@@ -558,10 +577,12 @@ app.addEventListener("click", (e) => {
         void (async () => {
           try {
             if (!navigator.clipboard) throw new Error();
-            await navigator.clipboard.writeText(state.join);
+            await navigator.clipboard.writeText(
+              state.join + (notebookView ? "?view=notebook" : ""),
+            );
           } catch {
             const field = document.createElement("textarea");
-            field.value = state.join;
+            field.value = state.join + (notebookView ? "?view=notebook" : "");
             btn.after(field);
             field.select();
             if (!document.execCommand("copy")) {
@@ -744,7 +765,7 @@ app.addEventListener("change", (e) => {
 });
 
 async function refresh() {
-  if (!state || busy || document.hidden) return;
+  if (!state || busy || teachingBusy() || document.hidden) return;
   const previous = state;
   try {
     const next = await api(
@@ -760,6 +781,7 @@ async function refresh() {
     if (status) status.textContent = "Room open";
     if (
       busy ||
+      teachingBusy() ||
       state !== previous ||
       JSON.stringify(next) === JSON.stringify(previous)
     )
@@ -800,7 +822,11 @@ try {
   if (host) {
     if (location.hash) {
       const secret = location.hash.slice(1);
-      history.replaceState(null, "", "/present");
+      history.replaceState(
+        null,
+        "",
+        "/present" + (notebookView ? "?view=notebook" : ""),
+      );
       await api("host", { secret });
     }
     state = await api("host/state");

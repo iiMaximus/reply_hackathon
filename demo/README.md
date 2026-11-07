@@ -1,8 +1,22 @@
 # Run the Solution Room demo
 
-## Play the public AI classroom
+## Run a classroom question
 
-[Student notebook](https://solution-room-demo.onrender.com/join) · [Projector and QR](https://solution-room-demo.onrender.com/board)
+In the private presenter link, open **Class questions**. Paste one exercise, upload a text PDF (up to four pages), upload a TXT/Markdown file, or choose **Mechanics · Beam deflection**. Upload starts analysis automatically. Review the question, answer key, optional reasoning choices and feedback. **Open for students** publishes the approved version. The projector at `/board` has the QR for `/join`; the phones need no account or room code. The student first chooses an answer, then optionally a reason, and immediately receives private feedback. **Close voting & see report** gives the instructor response counts, reasoning gaps and a suggested next question. **My progress** preserves first answers and private review attempts in that browser. An individual practice question is available while the room waits. The example mechanics report uses labeled fictional responses and never contributes votes to a real class.
+
+The server holds one active poll and up to twelve previous reports in memory. A process restart clears them. Students’ local progress survives that restart on the same browser. Only the private presenter can publish or close voting. The public projector shows turnout, and the quiz API returns anonymous aggregates to the presenter. Votes are bound to an HTTP-only browser session and retries retain the first answer. This is a formative check in a university tutorial.
+
+### What runs the analysis
+
+The Node server extracts the text of a PDF using unpdf. MiniLM searches vetted course references for mechanics, calculus and statistics. Exact reviewed examples include their prepared choices, possible reasoning errors and a solution. On other exercises, local mode preserves source wording and imports options labeled A–D, an optional `Key: B` and an `Explanation:` line. The teacher supplies any missing key. A close topic match can suggest a concept and teaching prompt. When voting ends, code counts answers, reasons, and cases where a correct answer was paired with an incorrect reason. MiniLM can use the observed reason distribution to select a specific course teaching move. The report displays the source of its recommendation.
+
+With a server-side `OPENAI_API_KEY`, the classroom can draft choices, likely misconceptions, feedback and a transfer question for unfamiliar material using `gpt-6-luna`. JPEG, PNG and WebP question photos then become available. A second call after voting receives the approved question and aggregate counts. There are no per-vote API calls. Each request times out after 22 seconds. The quiz caps output tokens and allows up to 30 provider requests per UTC day per process. Cloud failure falls back to the local workflow. To configure the hosted service, set `OPENAI_API_KEY` in Render’s environment. Set `OPENAI_QUIZ_MODEL` to override the default. `npm run demo` always disables cloud calls. [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna)
+
+**A rehearsal that exposes the difference.** On two phones, select *It stays the same* for the beam. On one, select the cubic rule. On the other, select the linear L/h rule. Both phones receive the same correct answer, but only one receives a reasoning correction. Close voting. The instructor sees two correct answers and one supported by the sound reason. A transfer question changes just the length. With no submissions, the report says it has no evidence.
+
+## Play the worked-step notebook
+
+[Student notebook](https://solution-room-demo.onrender.com/join?view=notebook) · [Notebook projector and QR](https://solution-room-demo.onrender.com/board?view=notebook)
 
 Submit `f′(x)=2+x²` or click the example line. The server runs MiniLM on the text to retrieve a likely course strategy. A separate algebra tool reads the polynomial and tests it against the derivative of the original curve. At x = 2, the proposed slope is 6 and the curve’s slope is 2. The figure shows the curve and the tangent implied by the student’s line. Move the test point to −2: the slopes happen to agree there. Revise to `f′(x)=x²−x` and see the comparison, hint and proposed follow-up change.
 
@@ -14,7 +28,7 @@ Each receipt explains what actually ran. The tutor sees the tested mismatch and 
 
 ## Play the simulated classroom
 
-Run `npm ci` and `npm run demo`. Open the private presenter link printed in the terminal. Put **Project exercise** on the classroom display. The QR opens `/join` directly. Students can scan from a phone or open the student link on a second device without typing a code or creating an account.
+Run `npm ci` and `npm run demo`. Open the private presenter link printed in the terminal, then choose **Open the worked-step notebook**. Put **Project exercise** on the classroom display. The QR opens `/join` directly. Students can scan from a phone or open the student link on a second device without typing a code or creating an account.
 
 1. On the tutor laptop, open the seeded exercise. Six labeled example notebooks show four approaches. Compare Noor’s proposed derivative with the curve, then inspect Elena’s cancellation, then look at Teo’s incomplete sketch reference under **Needs a closer look**. **Review history** shows how each step was handled. The tutor can correct a group. **Prepare for the exercise** contains possible mistakes, kept separate from submitted work.
 2. On a phone, tap **Try a sample notebook**, choose Noor’s, Elena’s, Luca’s or Sam’s page, and send it. Read the private hint or revise. A repeat attempt in the same reasoning group gets a different approved hint. A typed step or a real uploaded photo can also be sent; the rehearsal asks the tutor to read unfamiliar handwriting.
