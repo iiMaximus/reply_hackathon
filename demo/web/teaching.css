@@ -800,3 +800,15 @@ body.open-room { background: #f7f8fb; }
 .room-student nav[aria-label="Student views"] {gap:4px; background:transparent; border-bottom:1px solid var(--line);}
 .room-student nav[aria-label="Student views"] button {background:transparent; border-radius:0; flex:1; text-align:center; padding:8px 4px;}
 .room-student nav[aria-label="Student views"] button[aria-current="page"] {color:var(--action); border-bottom:2px solid var(--action);}
+.join-panel {max-width:480px;margin:clamp(16px,7vh,66px) auto 0;overflow:hidden;}
+.join-heading,.lobby {display:flex;align-items:center;gap:14px;}
+.join-heading {margin-bottom:24px;}
+.join-heading .heading {margin:0;}
+.open-room .join-heading h1,.open-room .lobby h1 {margin:0;}
+.join-mark {display:grid;place-items:center;flex:none;width:42px;height:42px;border-radius:12px;font-size:22px;color:#514697;background:#edeaf7;}
+.join-panel label {font-weight:600;}
+.open-room .join-panel #open-alias {width:100%;max-width:100%;font-size:17px;}
+#alias-description .lucide-icon {margin-right:4px;}
+.open-room .lobby {margin-top:24px;padding-block:28px;}
+.open-room .lobby h1 {font-size:21px;}
+.open-room .lobby p {margin-top:4px;color:var(--muted);}

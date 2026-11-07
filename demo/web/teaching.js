@@ -406,10 +406,7 @@ function student(c) {
         }
       });
     }
-    return (
-      heading("Join the class") +
-      `<section class="panel"><label for="open-alias">Choose a nickname</label><input id="open-alias" maxlength="24" autocomplete="off" value="${h(aliasInput)}"><p class="muted">Your nickname appears on the participation leaderboard. One point per question you try.</p><div class="actions">${btn("set-alias", "Join with nickname", true)}${btn("anonymous", "Stay anonymous")}</div></section>`
-    );
+    return `<section class="panel join-panel"><div class="join-heading"><span class="join-mark">${icon("book-open")}</span>${heading("Join the class")}</div><form id="join-class-form"><label for="open-alias">Choose a nickname</label><input id="open-alias" maxlength="24" autocomplete="off" aria-describedby="alias-description" placeholder="Nickname" value="${h(aliasInput)}"><p id="alias-description" class="muted">${icon("trophy")} Earn a participation point for each question you try. Your nickname appears on the leaderboard.</p><div class="actions"><button type="submit" class="primary">Join with nickname</button>${btn("anonymous", "Stay anonymous")}</div></form></section>`;
   }
   const nav = `<nav aria-label="Student views">${btn("class", "Class question", false, `aria-current="${tab === "class" ? "page" : "false"}"`)}${btn("progress", "My work", false, `aria-current="${tab === "progress" ? "page" : "false"}"`)}${btn("standings", "Leaderboard", false, `aria-current="${tab === "standings" ? "page" : "false"}"`)}</nav>`;
   if (tab === "standings") {
@@ -454,8 +451,7 @@ function student(c) {
   if (!r)
     return (
       nav +
-      heading("Class question") +
-      `<section class="panel waiting">${status("Waiting for the professor")}<p>The question will appear here when your professor opens it.</p></section>`
+      `<section class="panel waiting lobby"><span class="join-mark">${icon("radio")}</span><div><h1>Waiting for the professor</h1><p>The next question will appear here automatically.</p></div></section>`
     );
   let html =
     nav +
@@ -583,6 +579,21 @@ async function fileChosen(file) {
   worksheetRows = items;
   screen = "worksheet";
 }
+async function setNickname(anonymous) {
+  const value = anonymous ? "" : aliasInput.trim();
+  if (!value && !anonymous) {
+    error = "Enter a nickname or choose Stay anonymous.";
+    controls.draw();
+    return;
+  }
+  return task("Joining class", async () => {
+    await post("open/nickname", { alias: value });
+    rememberedAlias = value;
+    try {
+      localStorage.setItem("qai-classroom-alias", value);
+    } catch {}
+  });
+}
 async function act(b) {
   const a = b.dataset.actionOpen,
     c = state.classroom;
@@ -644,21 +655,7 @@ async function act(b) {
     controls.draw();
     return;
   }
-  if (a === "set-alias" || a === "anonymous") {
-    const value = a === "anonymous" ? "" : aliasInput.trim();
-    if (!value && a === "set-alias") {
-      error = "Enter a nickname or choose Stay anonymous.";
-      controls.draw();
-      return;
-    }
-    return task("Joining class", async () => {
-      await post("open/nickname", { alias: value });
-      rememberedAlias = value;
-      try {
-        localStorage.setItem("qai-classroom-alias", value);
-      } catch {}
-    });
-  }
+  if (a === "anonymous") return setNickname(true);
   if (a === "analyze") {
     if (screen !== "upload") {
       const reader = await import("/uploads.js"),
@@ -772,6 +769,11 @@ async function act(b) {
   }
   controls.draw();
 }
+document.addEventListener("submit", (e) => {
+  if (e.target.id !== "join-class-form") return;
+  e.preventDefault();
+  if (!pending) void setNickname(false);
+});
 document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-action-open]");
   if (root?.contains(b) && !pending) void act(b);
