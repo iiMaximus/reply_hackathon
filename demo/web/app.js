@@ -1,3 +1,4 @@
+import { lensPanel, paintProbe, selectX, agentRecord } from "/lens.js";
 const app = document.querySelector("#app");
 const notice = document.querySelector("#notice");
 const host = location.pathname === "/present";
@@ -160,7 +161,7 @@ function writtenFormula(formula) {
 function roomHeader(section, room) {
   document.body.classList.add("workroom");
   document.querySelector(".room-context").innerHTML =
-    `<span class="context-name">${esc(section)}</span>${state?.showcase ? `<span class="demo-label">${state.simulated ? "Simulated demo" : "Live AI"}</span>` : room ? `<span class="room-number">Room ${esc(room)}</span>` : ""}`;
+    `<span class="context-name">${esc(section)}</span>${state?.showcase ? `<span class="demo-label">${state.engine === "local" ? "MiniLM online" : state.simulated ? "Scripted rehearsal" : "OpenAI online"}</span>` : room ? `<span class="room-number">Room ${esc(room)}</span>` : ""}`;
 }
 
 function exerciseCard() {
@@ -236,19 +237,20 @@ function studentComposer() {
       <img class="work-preview" src="/samples/${selectedNotebook}.png" alt="Sample notebook: ${esc(selectedNotebook)}">
       <form data-form="notebook"><button class="send-action">Send sample step ↗</button></form></section>`;
   }
-  if (entryMode === "choose") {
-    const cameraFirst = window.matchMedia("(pointer: coarse)").matches;
-    const primary = cameraFirst
-      ? picker("camera", "Take a photo", "camera", true)
-      : `<button class="camera-action" data-pilot="type">${icon("pen")} Type a step</button>`;
-    return `<section class="composer"><h2>Share your next step</h2><p>One unfinished line is enough.</p>
-      ${primary}
-      <div class="other-methods">${picker("photo", "Upload a photo", "image")}${cameraFirst ? `<button data-pilot="type" class="picker-link">${icon("pen")} Type a step</button>` : ""}</div>
-      ${state.simulated ? '<button class="sample-link" data-pilot="sample">Try a sample notebook →</button>' : ""}
-      <div class="privacy-note">${icon("lock")} Only your tutor sees your work.${state.live ? " AI helps read it." : ""}</div>
-      ${editing ? '<button class="back-action" data-pilot="cancel">Keep my submitted step</button>' : ""}
-      ${pilotError ? `<p class="field-error" role="alert">${esc(pilotError)}</p>` : ""}</section>`;
+  if (entryMode === "choose" && state.showcase) {
+    return `<section class="margin-entry"><div class="folio-kicker">YOUR NOTEBOOK</div><h2>Try the next line.</h2><p class="entry-intro">Give the classroom agent a step to check. If you propose a derivative, it can test your slope against the curve.</p>
+      <form data-form="attempt"><label class="compose-field"><span class="sr-only">Your mathematical step</span>
+      <textarea id="step" maxlength="1500" placeholder="f′(x) = …" rows="2">${esc(draft)}</textarea></label>
+      <div class="entry-actions"><button class="send-action" ${draft.trim() ? "" : "disabled"}>Check my step ↗</button>
+      ${picker("photo", "Attach a photo", "image")}
+      ${window.matchMedia("(pointer:coarse)").matches ? picker("camera", "Camera", "camera", true) : ""}</div></form>
+      <div class="example-offer"><span>Try the slope test with</span><button data-pilot="probe-example">f′(x) = 2 + x² ↗</button></div>
+      ${state.simulated ? '<button class="sample-link" data-pilot="sample">Or open a sample notebook →</button>' : ""}
+      <p class="privacy-note">${icon("lock")} Your tutor sees your step. Classmates do not.</p>
+      <p class="field-error" id="pilot-error" role="alert" ${pilotError ? "" : "hidden"}>${esc(pilotError)}</p></section>`;
   }
+  if (entryMode === "choose")
+    return `<section class="composer"><h2>Share your next step</h2>${picker("camera", "Take a photo", "camera", true)}<div class="other-methods">${picker("photo", "Upload a photo", "image")}<button data-pilot="type" class="picker-link">Type a step</button></div></section>`;
   const hasPhoto = entryMode === "photo" && Boolean(photo);
   const write = !hasPhoto || showPhotoNote;
   return `<section class="composer"><button class="back-action" data-pilot="choose">← Input options</button>
@@ -275,30 +277,44 @@ function studentComposer() {
 
 function sentCard() {
   const review = state.attempt;
-  return `<section class="composer sent-card" role="status"><span class="sent-check" aria-hidden="true">✓</span>
-    <h2 tabindex="-1">${review.handoff ? "Your tutor will take a look." : "Your step is with your tutor."}</h2>
-    ${lastSentPhoto || review.notebook ? `<img class="receipt-photo" src="${lastSentPhoto || "/samples/" + esc(review.notebook) + ".png"}" alt="Notebook page you submitted">` : ""}
-    ${review.line ? `<p class="small">${review.notebook ? "Line read from the sample" : "Your step"}</p><blockquote>${esc(review.line)}</blockquote>` : ""}
-    <p>${esc(review.hint)}</p>
-    ${review.source ? `<p class="reference-line">Course reference · <a href="${esc(review.source.url)}" target="_blank" rel="noopener">${esc(review.source.title)} ↗</a></p>` : ""}
-    ${review.fallback ? '<p class="fallback-note">Live analysis was unavailable. Your tutor still received your step.</p>' : ""}
-    <button class="quiet-action" data-pilot="revise">${icon("pen")} Revise my step</button></section>`;
+  const title =
+    review.probe?.status === "mismatch"
+      ? "These slopes disagree."
+      : review.probe?.status === "match"
+        ? "Your derivative fits the curve."
+        : review.handoff
+          ? "One more detail, please."
+          : review.group === "lost"
+            ? "Check the division."
+            : review.group === "kept"
+              ? "Both roots are accounted for."
+              : "From slope to stationary points.";
+  return `<section class="agent-note sent-card" role="status"><div class="folio-kicker"><span class="agent-lamp"></span> CLASSROOM AGENT <span class="note-engine">${state.engine === "local" ? "MiniLM + course tools" : state.live ? "OpenAI + course tools" : "Scripted rehearsal"}</span></div>
+    <h2 tabindex="-1">${title}</h2>
+    ${lastSentPhoto || review.notebook ? `<img class="receipt-photo" src="${lastSentPhoto || "/samples/" + esc(review.notebook) + ".png"}" alt="Notebook page submitted">` : ""}
+    <div class="marked-line"><small>Your line</small><blockquote>${esc(review.line || "Photo submitted")}</blockquote></div>
+    ${lensPanel(review)}
+    <div class="agent-question"><small>Try next</small><p>${review.probe?.status === "mismatch" && review.probe.cubicTermMatches ? "The x² term checks out. " : ""}${esc(review.hint)}</p></div>
+    <button class="revise-pencil" data-pilot="revise">Revise my line ↗</button>
+    <div class="work-record"><h3>What the agent did</h3><ol>${agentRecord(review)}</ol>${review.source ? `<a href="${esc(review.source.url)}" target="_blank" rel="noopener">Course note · ${esc(review.source.title)} ↗</a>` : ""}</div></section>`;
 }
 
 const groupLabels = {
+  power: "Check the derivative",
   lost: "Divided by x",
   unclear: "Needs a closer look",
   started: "Set up the derivative",
   kept: "Kept both roots",
 };
 const questions = {
+  power: "Which term gives the wrong slope when you test the derivative?",
   lost: "Before dividing by x, which value do we need to check?",
   started: "Once you have the derivative, what makes the tangent horizontal?",
   kept: "How can you check that both values give a horizontal tangent?",
   unclear: "Which line would you like to look at together?",
 };
 function attentionGroups() {
-  const order = ["lost", "unclear", "started", "kept"];
+  const order = ["power", "lost", "unclear", "started", "kept"];
   return order
     .map((id) => state.groups.find((g) => g.id === id))
     .filter((g) => g?.count);
@@ -307,6 +323,8 @@ function attentionGroups() {
 function traceDetails(ex) {
   if (!ex.trace?.length) return "";
   const labels = {
+    check_slope: "Tested the derivative against the curve",
+    match_strategy: "Compared the line to course strategies",
     lookup_course: "Read course note",
     recall_practice: "Checked previous hint",
     record_step: "Recorded step",
@@ -365,21 +383,27 @@ function tutorForecast() {
 function nextMove() {
   const follow = state.challenge || state.suggested;
   const divisionGroup = state.groups.find((g) => g.id === "lost");
+  const slopeGroup = state.groups.find((g) => g.id === "power");
+  const powerRoute = follow?.title === "Test one derivative term";
+  const evidenceGroup = powerRoute ? slopeGroup : divisionGroup;
   const lost = divisionGroup.count;
   const visible =
-    divisionGroup.excerpts.find((e) => !e.example && e.line) ||
-    divisionGroup.excerpts.find((e) => e.line);
+    evidenceGroup.excerpts.find((e) => !e.example && e.line) ||
+    evidenceGroup.excerpts.find((e) => e.line);
   const pending = state.groups.find((g) => g.id === "unclear").count;
-  const line = lost
-    ? `${lost} of ${state.count} submissions divide by x. Check the zero case together before moving on.`
-    : pending && !follow
-      ? "The work so far needs clarification. Open a response below to review it."
-      : "Use a different equation to check whether students can apply the same reasoning.";
+  const line = powerRoute
+    ? "An audience step predicts a different slope from the curve. Revisit the power rule before solving for zero."
+    : lost && follow?.title === "Keep every root"
+      ? `${lost} of ${state.count} submissions divide by x. Check the zero case together before moving on.`
+      : pending && !follow
+        ? "The work so far needs clarification. Open a response below to review it."
+        : "Use a different equation to check whether students can apply the same reasoning.";
   if (state.challenge)
     return `<section class="responses next-move"><h2>Challenge is on phones</h2><p>${esc(follow.prompt)}</p>
     <p class="small">${state.audienceScored ? `${state.audienceCorrect} of ${state.audienceScored} audience answers earned a point.` : "Waiting for an audience answer."}</p>${board()}</section>`;
   return `<section class="responses next-move"><h2>What to cover next</h2>
     <p>${state.count ? esc(line) : "Share the exercise and wait for a first step."}</p>
+    ${powerRoute && visible?.probe?.example ? `<p class="probe-summary">At x = ${esc(visible.probe.example.x)}: submitted slope <b>${esc(visible.probe.example.predicted)}</b> · curve slope <b>${esc(visible.probe.example.measured)}</b></p>` : ""}
     ${visible ? `<figure class="evidence-slip"><figcaption>${visible.example ? esc(visible.exampleName) + " · example notebook" : "Anonymous audience step"}</figcaption><blockquote>${esc(visible.line)}</blockquote></figure>` : ""}
     ${
       follow
@@ -405,9 +429,10 @@ function pilotView() {
       state.showcase && state.attempt && !state.challenge
         ? '<p class="waiting-note">Your tutor can open a follow-up here during class.</p>'
         : "";
-    const student = `<div class="student-layout">${exerciseCard()}<div class="student-work">${follow}${response}${waiting}</div></div>`;
+    const brief = `<section class="lesson-strip"><div><p class="folio-kicker">ANALISI I &nbsp; / &nbsp; EXERCISE SHEET</p><h1>${esc(state.lesson.title)}</h1><p>Where is the tangent horizontal?</p></div><div class="lesson-formula">${writtenFormula(state.lesson.formula)}</div></section>`;
+    const student = `<div class="student-layout">${brief}<div class="student-work">${follow}${response}${waiting}</div></div>`;
     app.innerHTML = state.showcase ? studentShowcase(student) : student;
-    drawSheets();
+    paintProbe(state.attempt);
     return;
   }
   const groups = attentionGroups();
@@ -522,6 +547,23 @@ app.addEventListener("click", (e) => {
   if (btn.dataset.notebook) {
     selectedNotebook = btn.dataset.notebook;
     render();
+    return;
+  }
+  if (btn.dataset.pilot === "probe-example") {
+    void run(async () => {
+      state = await api("attempt", {
+        text: "f′(x)=2+x²",
+        share: true,
+        round: state.round,
+      });
+      lastSentPhoto = "";
+      draft = "";
+      photo = "";
+      editing = false;
+      entryMode = "choose";
+      render();
+      document.querySelector(".agent-note h2")?.focus();
+    }, btn);
     return;
   }
   if (btn.dataset.group) {
@@ -709,6 +751,12 @@ async function resizePhoto(file) {
   }
 }
 app.addEventListener("change", (e) => {
+  if (e.target.id === "probe-x") {
+    selectX(Number(e.target.value));
+    render();
+    document.querySelector("#probe-x")?.focus({ preventScroll: true });
+    return;
+  }
   if (
     (e.target.id === "photo" || e.target.id === "camera") &&
     e.target.files?.[0]

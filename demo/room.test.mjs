@@ -175,17 +175,17 @@ test(
     );
     assert.equal(
       (await api("host/release", {}, host)).value.challenge.title,
-      "Keep every root",
+      "Shift the roots",
     );
     assert.equal(
       (await api("state", undefined, student)).value.challenge.title,
-      "Keep every root",
+      "Shift the roots",
     );
     const projection = (await api("board")).value;
     assert.equal(projection.examples, 6);
     assert.equal(projection.groups, undefined);
     assert.equal(projection.challenge.key, undefined);
-    await api("score", { answer: 1, reason: 1, round: 2 }, student);
+    await api("score", { answer: 2, reason: 0, round: 2 }, student);
     await api("alias", { alias: "Jo" }, student);
     const complete = (await api("host/state", undefined, host)).value;
     assert.equal(complete.audienceCorrect, 1);

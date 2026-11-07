@@ -3,11 +3,24 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "start": "node --env-file-if-exists=.env demo/server.mjs", "poc": "node --env-file-if-exists=.env demo/server.mjs --poc", "demo": "node demo/server.mjs --simulate", "live": "node --env-file-if-exists=.env demo/server.mjs --live", "test": "node --test demo/*.test.mjs" },
-  "engines": { "node": ">=22.9" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env demo/server.mjs",
+    "poc": "node --env-file-if-exists=.env demo/server.mjs --poc",
+    "demo": "node demo/server.mjs --simulate",
+    "live": "node --env-file-if-exists=.env demo/server.mjs --live",
+    "test": "node --test demo/*.test.mjs",
+    "model:prepare": "node demo/model/prepare.mjs",
+    "classroom": "node demo/server.mjs --local-ai",
+    "test:model": "node demo/model/evaluate.mjs"
+  },
+  "engines": {
+    "node": ">=22.9"
+  },
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.2.0",
     "@fontsource/instrument-serif": "^5.2.0",
+    "@huggingface/tokenizers": "0.2.0",
+    "onnxruntime-web": "1.22.0",
     "qrcode": "^1.5.4"
   }
 }

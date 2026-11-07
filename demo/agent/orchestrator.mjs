@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { cards, handoffs, hintIds, hints } from "./course.mjs";
 import { notebooks } from "../simulation.mjs";
+import { derivativeLine, probeDerivative } from "./slope.mjs";
 
 const choice = (values) => ({ type: "string", enum: values });
 function tool(name, description, properties) {
@@ -19,6 +20,16 @@ function tool(name, description, properties) {
 }
 export const tools = [
   tool(
+    "match_strategy",
+    "Use the local sentence encoder to retrieve a possible reasoning strategy for this submission. Its result is provisional.",
+    {},
+  ),
+  tool(
+    "check_slope",
+    "Compare the submitted derivative polynomial with the lesson curve and select a test point. Returns evidence. Use an empty line for typed work; only for an image may you supply a transcription.",
+    { line: { type: "string" } },
+  ),
+  tool(
     "lookup_course",
     "Read the course note, marking criteria and approved hints for this concept.",
     { card: choice(Object.keys(cards)) },
@@ -36,7 +47,7 @@ export const tools = [
       group: choice(Object.keys(hints)),
       line: { type: "string" },
       hint: choice(hintIds),
-      followUp: choice(["factor", "shift"]),
+      followUp: choice(["factor", "shift", "power"]),
       confidence: choice(["clear", "uncertain"]),
     },
   ),
@@ -78,6 +89,7 @@ export async function runAgent({
   mode = "scripted",
   onEvent = () => {},
   stepBudget = 4,
+  matchStrategy,
   timeoutMs = 25000,
 }) {
   const trace = [],
@@ -86,6 +98,12 @@ export async function runAgent({
   const runId = randomUUID();
   const signal = AbortSignal.timeout(timeoutMs);
   let recalled = false;
+  let strategy = null,
+    probe = null;
+  const submission = work.notebook ? notebooks[work.notebook]?.line : work.text;
+  const allowed = matchStrategy
+    ? tools
+    : tools.filter((t) => t.name !== "match_strategy");
   function log(step, action, result) {
     const event = { step, action, result };
     trace.push(event);
@@ -101,6 +119,8 @@ export async function runAgent({
       trace,
       runId,
       source: null,
+      strategy,
+      probe,
       followUp: null,
       ...(reason === "unavailable" ? { fallback: true } : {}),
     };
@@ -116,7 +136,7 @@ export async function runAgent({
   for (let step = 1; step <= stepBudget; step++) {
     let decision;
     try {
-      decision = await decide({ work, tools, history, signal });
+      decision = await decide({ work, tools: allowed, history, signal });
       if (signal.aborted) throw new Error("timeout");
     } catch {
       log(step, "ask_tutor", "unavailable");
@@ -131,11 +151,28 @@ export async function runAgent({
       /* The model observes a rejected call and may retry. */
     }
     let observation;
-    if (!spec || !validArguments(spec, args)) {
+    if (!spec || !allowed.includes(spec) || !validArguments(spec, args)) {
       observation = {
         ok: false,
         error: "Use a listed tool with its exact fields.",
       };
+    } else if (call.name === "match_strategy") {
+      try {
+        strategy = submission ? await matchStrategy(submission) : null;
+      } catch {
+        log(step, "ask_tutor", "unavailable");
+        return handoff("unavailable");
+      }
+      observation = { ok: true, strategy };
+    } else if (call.name === "check_slope") {
+      probe = probeDerivative(
+        derivativeLine(submission)
+          ? submission
+          : work.image
+            ? args.line.slice(0, 300)
+            : submission,
+      );
+      observation = { ok: true, probe };
     } else if (call.name === "ask_tutor") {
       log(step, call.name, args.reason);
       return handoff(args.reason);
@@ -151,6 +188,7 @@ export async function runAgent({
         followUps: {
           factor: "Preserve a root when dividing.",
           shift: "Find stationary values for shifted factors.",
+          power: "Test the derivative of each term in another polynomial.",
         },
       };
     } else if (call.name === "recall_practice") {
@@ -168,7 +206,23 @@ export async function runAgent({
         : work.text;
       const line = args.line.trim();
       const matches = evidence && normalize(evidence).includes(normalize(line));
-      if (!sources.has(args.card) || !recalled)
+      if ((derivativeLine(submission) || derivativeLine(line)) && !probe)
+        observation = {
+          ok: false,
+          error: "Run check_slope on the submitted derivative first.",
+        };
+      else if (
+        probe?.status === "unsupported" ||
+        (probe?.status === "mismatch" && args.group !== "power") ||
+        (args.group === "power" &&
+          (probe?.status !== "mismatch" || args.followUp !== "power"))
+      )
+        observation = {
+          ok: false,
+          error:
+            "The mathematical check must support this group. Request clarification when it cannot read the expression.",
+        };
+      else if (!sources.has(args.card) || !recalled)
         observation = {
           ok: false,
           error: "Consult the cited card and previous hint first.",
@@ -201,6 +255,8 @@ export async function runAgent({
           hint: hint[1],
           hintId: hint[0],
           source: sourceFor(args.card),
+          strategy,
+          probe,
           followUp: args.followUp,
           mode,
           trace,
@@ -213,11 +269,15 @@ export async function runAgent({
       step,
       spec?.name || "unknown_tool",
       observation.ok
-        ? call.name === "lookup_course"
-          ? args.card
-          : previous
-            ? "previous_hint"
-            : "no_previous_hint"
+        ? call.name === "match_strategy"
+          ? (strategy?.strategy ?? "no_text")
+          : call.name === "check_slope"
+            ? (probe?.status ?? "no_claim")
+            : call.name === "lookup_course"
+              ? args.card
+              : previous
+                ? "previous_hint"
+                : "no_previous_hint"
         : "rejected",
     );
     history.push({ call, output: decision.output, observation });

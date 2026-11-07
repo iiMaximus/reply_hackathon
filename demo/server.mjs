@@ -19,7 +19,11 @@ import {
 } from "./lesson.mjs";
 
 const pilot = process.argv.includes("--poc");
-const simulated = process.argv.includes("--simulate");
+const localAI = process.argv.includes("--local-ai");
+const simulated = localAI || process.argv.includes("--simulate");
+const strategyMatcher = localAI
+  ? await (await import("./model/strategies.mjs")).createStrategyMatcher()
+  : null;
 const liveClass = process.argv.includes("--live");
 const showcase = simulated || liveClass;
 if (liveClass && !simulated && !process.env.OPENAI_API_KEY) {
@@ -65,6 +69,9 @@ async function seedClass() {
     p.attempt = await runAgent({
       work: p.work,
       decide: rehearsalPlanner,
+      matchStrategy: strategyMatcher,
+      stepBudget: strategyMatcher ? 5 : 4,
+      mode: localAI ? "local" : "scripted",
       onEvent: logAgent,
     });
   for (const p of prepared) examples.set(p.reviewId, p);
@@ -76,6 +83,7 @@ const files = {
   "/": [new URL("index.html", web), "text/html; charset=utf-8"],
   "/present": [new URL("index.html", web), "text/html; charset=utf-8"],
   "/board": [new URL("index.html", web), "text/html; charset=utf-8"],
+  "/lens.js": [new URL("lens.js", web), "text/javascript; charset=utf-8"],
   "/app.js": [new URL("app.js", web), "text/javascript; charset=utf-8"],
   "/style.css": [new URL("style.css", web), "text/css; charset=utf-8"],
   "/join": [new URL("index.html", web), "text/html; charset=utf-8"],
@@ -156,16 +164,31 @@ function standings() {
       ...(p.example ? { example: true } : {}),
     }));
 }
+function proposedChallenge() {
+  const real = [...people.values()].filter(
+    (p) => p.attempt && p.attempt.group !== "unclear",
+  );
+  const current = real.length ? real : participants().filter((p) => p.attempt);
+  return recommend(current.map((p) => p.attempt));
+}
+function reasonFor(variant) {
+  if (variant === "power")
+    return "A submitted derivative predicts a slope the curve does not have.";
+  if (variant === "factor")
+    return "A step divided by x without showing the zero case.";
+  return "Check whether the same reasoning works with different factors.";
+}
 function dashboard() {
   const students = participants();
   const submitted = students.filter((p) => p.attempt);
-  const suggested = recommend(submitted.map((p) => p.attempt));
+  const suggested = proposedChallenge();
   return {
     room,
     join,
     pilot: pilot || showcase,
     showcase,
     simulated,
+    engine: localAI ? "local" : live ? "openai" : "scripted",
     round,
     examples: examples.size,
     live,
@@ -185,6 +208,8 @@ function dashboard() {
           id: p.reviewId,
           line: p.attempt.line,
           trace: p.attempt.trace,
+          probe: p.attempt.probe,
+          strategy: p.attempt.strategy,
           source: p.attempt.source,
           handoff: p.attempt.handoff,
           ...(p.example ? { example: true, exampleName: p.alias } : {}),
@@ -198,11 +223,7 @@ function dashboard() {
     })),
     suggested: publicVariant(suggested),
     challenge: publicVariant(challenge),
-    recommendationReason:
-      releaseReason ??
-      (suggested === "factor"
-        ? "A step divided by x without showing the zero case."
-        : "Test whether students can find both stationary values when the factors change."),
+    recommendationReason: releaseReason ?? reasonFor(suggested),
     board: standings(),
     lesson,
     prediction,
@@ -214,6 +235,7 @@ function studentView(p) {
     pilot: pilot || showcase,
     showcase,
     simulated,
+    engine: localAI ? "local" : live ? "openai" : "scripted",
     round,
     lesson: studentLesson(),
     practice: practiceFor(p.attempt?.group),
@@ -263,6 +285,7 @@ async function handle(req, res) {
       room,
       showcase,
       simulated,
+      engine: localAI ? "local" : live ? "openai" : "scripted",
       round,
       examples: examples.size,
       lesson: studentLesson(),
@@ -310,17 +333,10 @@ async function handle(req, res) {
     if (path === "/api/host/release") {
       if (showcase && !participants().some((p) => p.attempt))
         fail(409, "Collect a step first.");
-      challenge ??= recommend(
-        participants()
-          .filter((p) => p.attempt)
-          .map((p) => p.attempt),
-      );
+      challenge ??= proposedChallenge();
       if (!challenge)
         fail(409, "Review a clear step before opening a follow-up.");
-      releaseReason ??=
-        challenge === "factor"
-          ? "A step divided by x without showing the zero case."
-          : "Test whether students can find both stationary values when the factors change.";
+      releaseReason ??= reasonFor(challenge);
       for (const p of examples.values())
         p.scored ??= { point: p.exampleTransfer };
     } else if (simulated && path === "/api/host/examples") {
@@ -366,11 +382,13 @@ async function handle(req, res) {
         fail(400, "That excerpt is unavailable.");
       p.attempt.group = input.group;
       p.attempt.followUp =
-        input.group === "lost"
-          ? "factor"
-          : input.group === "unclear"
-            ? null
-            : "shift";
+        input.group === "power"
+          ? "power"
+          : input.group === "lost"
+            ? "factor"
+            : input.group === "unclear"
+              ? null
+              : "shift";
       p.attempt.handoff = input.group === "unclear" ? "ambiguous" : null;
       p.attempt.trace?.push({
         step: p.attempt.trace.length + 1,
@@ -448,7 +466,15 @@ async function handle(req, res) {
       const review = await runAgent({
         work,
         previous: readMemory(cookie(req, memoryCookie)),
-        mode: live ? "live" : notebook ? "scripted" : "rehearsal",
+        mode: localAI
+          ? "local"
+          : live
+            ? "live"
+            : notebook
+              ? "scripted"
+              : "rehearsal",
+        stepBudget: 5,
+        matchStrategy: strategyMatcher,
         decide: live ? openAIPlanner({ reserve }) : rehearsalPlanner,
         onEvent: logAgent,
       });
@@ -539,10 +565,12 @@ server.listen(port, "0.0.0.0", () => {
     "Students: " +
       join +
       " · " +
-      (simulated
-        ? "Scripted simulation"
-        : live
-          ? "Live analysis"
-          : "Rehearsal analysis"),
+      (localAI
+        ? "MiniLM classroom"
+        : simulated
+          ? "Scripted simulation"
+          : live
+            ? "Live analysis"
+            : "Rehearsal analysis"),
   );
 });

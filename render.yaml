@@ -3,8 +3,8 @@ services:
     name: solution-room-demo
     runtime: node
     plan: free
-    buildCommand: npm ci
-    startCommand: npm run demo
+    buildCommand: npm ci && npm run model:prepare
+    startCommand: npm run classroom
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION

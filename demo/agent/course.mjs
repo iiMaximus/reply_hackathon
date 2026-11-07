@@ -1,6 +1,16 @@
 import { lesson } from "../lesson.mjs";
 
 export const hints = {
+  power: [
+    [
+      "exponent",
+      "Differentiate the two terms separately. What happens to the exponent of the second term?",
+    ],
+    [
+      "coefficient",
+      "Keep the coefficient in front of each power. Which term would give the slope your line predicts?",
+    ],
+  ],
   lost: [
     ["division", "Which values of x allow the division you used?"],
     [
@@ -24,6 +34,14 @@ export const hints = {
   ],
 };
 export const cards = {
+  powers: {
+    id: "powers",
+    title: "Power and constant-multiple rules",
+    reference:
+      "https://openstax.org/books/calculus-volume-1/pages/3-3-differentiation-rules",
+    note: "For each term axⁿ the slope contribution is naxⁿ⁻¹. Compare the proposed derivative to the exercise before looking for zeros.",
+    groups: ["power", "started"],
+  },
   stationary: {
     id: "stationary",
     title: "Horizontal tangents",
@@ -41,7 +59,7 @@ export const cards = {
 };
 export const handoffs = {
   ambiguous:
-    "Which mathematical line should your tutor look at? Type it, or share a clearer photo.",
+    "Which operation were you trying here? Add one line so your tutor can follow the step.",
   answer_request:
     "Try writing the first operation you would use. Your tutor can discuss that step with you.",
   unsupported:

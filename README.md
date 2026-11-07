@@ -6,9 +6,9 @@ Reply Student Tech Clash 2026 · AI on Campus
 
 [Join the deployed classroom](https://solution-room-demo.onrender.com/join) · [Open the projector](https://solution-room-demo.onrender.com/board) · [Agent architecture, examples and evaluation](demo/README.md#how-the-classroom-agent-works)
 
-The tutor demo opens midway through an Analisi I exercise: six example attempts are on the desk, two have lost a root, and one needs human review. The simulation uses the same tools, source checks, hint memory and action limits as the OpenAI-backed classroom. Real participants join by QR and are counted separately.
+The public classroom runs a local MiniLM sentence encoder and a mathematical checking tool without an API key. Try `f′(x)=2+x²`. The agent selects a test point, compares the proposed tangent to the original curve, shows the mismatch, and recommends a fresh problem to the tutor. The notebook displays the tools that actually ran. Six labeled example attempts are ready for presenting; audience work drives the next question when people join.
 
-**[Play the simulated classroom](demo/README.md#play-the-simulated-classroom).** Run `npm run demo` or [deploy the simulation on Render](https://render.com/deploy?repo=https://github.com/iiMaximus/reply_hackathon). Students scan straight into the exercise. Try a prepared notebook, see the tutor’s feedback, play the follow-up and compare scores. The simulation is labeled throughout; the model-backed version runs separately with `npm run live`.
+**[Run or rehearse the demo](demo/README.md#play-the-public-ai-classroom).** Use `npm run model:prepare` and `npm run classroom` for the local AI; `npm run demo` for the scripted fallback; or `npm run live` with an OpenAI key for generative planning and photo interpretation.
 
 **[Try the one-exercise proof of concept first](demo/README.md#start-with-the-proof-of-concept).** Run `npm run poc`. Students send an unfinished step from their phones and a tutor decides what to explain from the incoming work. The guide includes a five-minute classroom test and a criterion for trying a second session.
 

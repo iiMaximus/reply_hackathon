@@ -1,5 +1,17 @@
 # Run the Solution Room demo
 
+## Play the public AI classroom
+
+[Student notebook](https://solution-room-demo.onrender.com/join) · [Projector and QR](https://solution-room-demo.onrender.com/board)
+
+Submit `f′(x)=2+x²` or click the example line. The server runs MiniLM on the text to retrieve a likely course strategy. A separate algebra tool reads the polynomial and tests it against the derivative of the original curve. At x = 2, the proposed slope is 6 and the curve’s slope is 2. The figure shows the curve and the tangent implied by the student’s line. Move the test point to −2: the slopes happen to agree there. Revise to `f′(x)=x²−x` and see the comparison, hint and proposed follow-up change.
+
+Each receipt explains what actually ran. The tutor sees the tested mismatch and can publish a fresh power-rule problem. Audience work takes precedence over the six labeled rehearsal examples. The local model retrieves English reasoning strategies; it does not generate prose, recognize arbitrary handwriting or prove algebra. Unsupported expressions or unclear photos go to the tutor. Prepared notebook pages have known transcriptions.
+
+**Run locally:** Node 22, then `npm ci`, `npm run model:prepare`, `npm run classroom`. The Render build performs the same download at a pinned revision and checks the model’s SHA-256. All inference happens on the server; phones download no model and student text does not go to a third party in this mode. The quantized weights are about 23 MB. [Original MiniLM model card](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) · [ONNX conversion and license](https://huggingface.co/Xenova/all-MiniLM-L6-v2) · [ONNX Runtime](https://onnxruntime.ai/)
+
+**Three modes:** `npm run classroom` runs the local encoder plus the decision policy and tools. `npm run demo` is a deterministic backup with the same slope check. `npm run live` uses OpenAI function calls and image input when a server key is configured. To evaluate the real local model, run `npm run test:model` after downloading the weights. `npm test` independently tests symbolic equivalence, counterexamples, tool limits, room state and privacy.
+
 ## Play the simulated classroom
 
 Run `npm ci` and `npm run demo`. Open the private presenter link printed in the terminal. Put **Project exercise** on the classroom display. The QR opens `/join` directly. Students can scan from a phone or open the student link on a second device without typing a code or creating an account.
@@ -17,12 +29,13 @@ One Node server runs the phone, tutor and projector views. QRCode generates the 
 
 | Decision | Application behavior |
 | --- | --- |
+| Interpret a submitted line | `match_strategy` embeds the text with MiniLM, compares it with teacher-written reference explanations, and abstains on weak or close matches. An explicit derivative claim invokes `check_slope`, which compares polynomial coefficients and returns a numeric witness. |
 | Look up the relevant concept | `lookup_course` returns a card with the criteria, allowed reasoning groups, hint choices and follow-up choices. |
 | Avoid repeating an unhelpful question | `recall_practice` returns the last group and hint for this participant on this browser. The server stores only two allowlisted IDs in a 30-day HTTP-only cookie in a separate namespace for the rehearsal. The cookie is an untrusted preference. It cannot change scores, authorize an action or count as classroom evidence. |
 | Record an observed step | `record_step` returns a validated observation to the room handler. The handler replaces the student’s prior attempt, remembers the chosen hint and makes the proposed follow-up available to the tutor. Only a tutor’s release action can publish the question. |
 | Ask for help | `ask_tutor` sends an unclear or unsupported step to the tutor. An explicit answer request receives a first-step question. An outage, unknown tool, invalid evidence or exhausted budget cannot publish a grade or manufacture a diagnosis. |
 
-The orchestrator allows four model decisions, one tool call per decision, within a 25-second run. Intermediate tool results are fed back into the next request, including the returned reasoning items required for stateless Responses calls. Evidence from typed work must quote an actual line. For a photo, the live model proposes a transcription: the student and tutor can correct it. Only approved hint text is returned. Each decision emits a structured event with a run ID, action and outcome; logs exclude student text, photos, aliases and private model reasoning. The student’s current review and redacted trace are replaced on revision; the browser hint preference survives a fresh room. [Versioned prompt](agent/instructions.md) · [Agent loop](agent/orchestrator.mjs) · [Provider adapters](agent/providers.mjs) · [OpenAI function calling](https://developers.openai.com/api/docs/guides/function-calling)
+The classroom orchestrator allows up to five decisions, one tool call per decision, within a 25-second run. Intermediate tool results are fed back into the next request, including the returned reasoning items required for stateless Responses calls. Evidence from typed work must quote an actual line. For a photo, the live model proposes a transcription: the student and tutor can correct it. Only approved hint text is returned. Each decision emits a structured event with a run ID, action and outcome; logs exclude student text, photos, aliases and private model reasoning. The student’s current review and redacted trace are replaced on revision; the browser hint preference survives a fresh room. [Versioned prompt](agent/instructions.md) · [Agent loop](agent/orchestrator.mjs) · [Provider adapters](agent/providers.mjs) · [OpenAI function calling](https://developers.openai.com/api/docs/guides/function-calling)
 
 ### Example interactions and evaluation
 
@@ -36,7 +49,7 @@ Run `npm test` for the offline evaluation: notebook traces, repeated hints, clar
 
 The Render blueprint generates a private presenter secret so the tutor can bookmark their presenter link across service restarts. Keep that link on the tutor laptop; the projector and student URLs are public.
 
-Use [Deploy the demo on Render](https://render.com/deploy?repo=https://github.com/iiMaximus/reply_hackathon). The repository’s blueprint starts one free Node web service with `npm run demo`. After the deploy completes, open the private **Professor** link from the service logs. Share the public service’s `/join` or project its `/board`; the QR uses Render’s service URL. The free service may take time to wake up, so open it before presenting. Room state is in memory and clears on a process restart; the student URL stays the same. [Render deployment button](https://render.com/docs/deploy-to-render) · [Render environment variables](https://render.com/docs/environment-variables) · [Free service behavior](https://render.com/docs/free)
+Use [Deploy the demo on Render](https://render.com/deploy?repo=https://github.com/iiMaximus/reply_hackathon). The repository’s blueprint starts one free Node web service with `npm run classroom`. After the deploy completes, open the private **Professor** link from the service logs. Share the public service’s `/join` or project its `/board`; the QR uses Render’s service URL. The free service may take time to wake up, so open it before presenting. Room state is in memory and clears on a process restart; the student URL stays the same. [Render deployment button](https://render.com/docs/deploy-to-render) · [Render environment variables](https://render.com/docs/environment-variables) · [Free service behavior](https://render.com/docs/free)
 
 The first customer to approach is the teaching assistant who leads a first-year engineering **Analisi I esercitazione at PoliTO**, works through an exercise sheet on the board and has to decide which algebra step deserves class time. The first student is the first-year engineering student already copying that solution into a notebook or tablet, who has a partial line but would hesitate to raise a hand. The course coordinator is the person to approach about a second group after a TA asks to run it again. These are pilot hypotheses.
 

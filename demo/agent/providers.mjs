@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { classifyPracticeText } from "../analysis.mjs";
 import { notebookReview } from "../simulation.mjs";
 import { lesson } from "../lesson.mjs";
+import { derivativeLine } from "./slope.mjs";
 import { hints } from "./course.mjs";
 
 const instructions = readFileSync(
@@ -68,34 +69,80 @@ export function openAIPlanner({
 }
 
 // A deterministic substitute for the planner only. Tools, validation and effects are shared.
-export async function rehearsalPlanner({ work, history }) {
+export async function rehearsalPlanner({ work, history, tools }) {
+  const text = work.notebook
+    ? notebookReview(work.notebook).line
+    : work.text || "";
   const reading = work.notebook
     ? notebookReview(work.notebook)
-    : classifyPracticeText(work.text || "");
+    : classifyPracticeText(text);
   const act = (name, args = {}) => ({
     call: {
       name,
       arguments: JSON.stringify(args),
-      call_id: "demo-" + history.length,
+      call_id: "step-" + history.length,
     },
     output: [],
   });
-  if (reading.group === "unclear")
+  const result = (name) =>
+    history.find((t) => t.call.name === name && t.observation.ok)?.observation;
+  if (!text) return act("ask_tutor", { reason: "ambiguous" });
+  if (
+    tools.some((t) => t.name === "match_strategy") &&
+    !result("match_strategy")
+  )
+    return act("match_strategy");
+  const strategy = result("match_strategy")?.strategy?.strategy;
+  const claim = derivativeLine(text);
+  let group = reading.group,
+    line = reading.line;
+  if (claim || strategy === "probe") {
+    if (!result("check_slope")) return act("check_slope", { line: "" });
+    const checked = result("check_slope").probe;
+    if (checked?.status === "unsupported")
+      return act("ask_tutor", { reason: "unsupported" });
+    if (checked?.status === "mismatch") {
+      group = "power";
+      line = checked.line;
+    }
+    if (checked?.status === "match" && group === "unclear") {
+      group = "started";
+      line = checked.line;
+    }
+  }
+  // Semantic retrieval chooses a course route. Ambiguous references and negated claims need a person.
+  if (
+    group === "unclear" &&
+    ["started", "kept", "lost"].includes(strategy) &&
+    !/\b(?:not|never|except|unless|without)\b/i.test(text)
+  ) {
+    if (
+      strategy !== "kept" ||
+      /\bboth\b|\beach\b|\btwo\b|\beither\b/i.test(text)
+    )
+      group = strategy;
+  }
+  if (group === "unclear") return act("ask_tutor", { reason: "ambiguous" });
+  if (
+    ["kept", "lost"].includes(group) &&
+    /(?:don['’]t|didn['’]t|did not|cannot|can['’]t|never|without)\s+(?:simply\s+)?(?:cancel|divid|factor)/i.test(
+      text,
+    )
+  )
     return act("ask_tutor", { reason: "ambiguous" });
-  const card = reading.group === "started" ? "stationary" : "roots";
+  const card =
+    group === "power" ? "powers" : group === "started" ? "stationary" : "roots";
   if (!history.some((t) => t.observation?.card?.id === card))
     return act("lookup_course", { card });
-  const recalled = history.find(
-    (t) => t.call.name === "recall_practice" && t.observation.ok,
-  );
+  const recalled = result("recall_practice");
   if (!recalled) return act("recall_practice");
-  const choices = hints[reading.group];
   return act("record_step", {
     card,
-    group: reading.group,
-    line: reading.line,
-    hint: choices.find(([id]) => id !== recalled.observation.previous?.hint)[0],
-    followUp: reading.group === "lost" ? "factor" : "shift",
+    group,
+    line,
+    hint: hints[group].find(([id]) => id !== recalled.previous?.hint)[0],
+    followUp:
+      group === "power" ? "power" : group === "lost" ? "factor" : "shift",
     confidence: "clear",
   });
 }

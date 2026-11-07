@@ -20,9 +20,22 @@ export const groups = {
   kept: "Kept both stationary values",
   started: "Set up the derivative",
   unclear: "Needs a closer look",
+  power: "Derivative differs from the curve’s slope",
 };
 
 export const variants = {
+  power: {
+    title: "Test one derivative term",
+    prompt: "For h(x) = x³/3 − 3x²/2, which expression gives the slope?",
+    answers: ["x² − 3x", "x² − 3", "x³ − 3x"],
+    key: 0,
+    reasons: [
+      "Only the coefficient changes",
+      "Differentiating x² lowers its exponent and multiplies its coefficient",
+      "A horizontal tangent always occurs at x = 0",
+    ],
+    reasonKey: 1,
+  },
   factor: {
     title: "Keep every root",
     prompt: "If g′(x) = x² − 3x, where is the tangent horizontal?",
@@ -50,6 +63,8 @@ export const variants = {
 };
 
 export function recommend(attempts) {
+  if (attempts.some((a) => a.group === "power" || a.followUp === "power"))
+    return "power";
   if (attempts.some((a) => a.group === "lost" || a.followUp === "factor"))
     return "factor";
   return attempts.some((a) => a.group !== "unclear") ? "shift" : null;
@@ -69,6 +84,13 @@ export const practice = {
 };
 
 export function practiceFor(group) {
+  if (group === "power")
+    return {
+      focus: "Differentiate one term at a time",
+      prompt: "For h(x) = x³/3 − 2x², what does each term contribute to h′(x)?",
+      explanation:
+        "The cubic contributes x². The term −2x² contributes −4x, so h′(x) = x² − 4x.",
+    };
   if (group === "lost") return { ...practice, focus: "Checking a division" };
   if (group === "kept")
     return {
