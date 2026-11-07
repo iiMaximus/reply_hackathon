@@ -4,6 +4,8 @@ Reply Student Tech Clash 2026 · AI on Campus
 
 ## Solution Room
 
+**[Try the one-exercise proof of concept first](demo/README.md#start-with-the-proof-of-concept).** Run `npm run poc`. Students send an unfinished step from their phones and a tutor decides what to explain from the incoming work. The guide includes a five-minute classroom test and a criterion for trying a second session.
+
 **[Run the phone demo, see the architecture and rehearse the pitch](demo/README.md)**. The repository now includes a working student room, a professor dashboard and an offline rehearsal path. Before anyone submits, the professor can request likely mistakes and example steps to watch for. The live counts come only from submitted work.
 
 **Solution Room lets a professor see how students are approaching the exercise on the board while there is still time to explain a tricky step.** Students can snap a photo of their workings, upload a tablet screenshot or type a first move. The AI reads the steps against the professor’s course material and groups similar attempts for the professor. Students get private feedback and can try a fresh in-class challenge for a point on an optional weekly leaderboard. [Original classroom feedback proposal](ai-classroom-feedback-proposal.md)

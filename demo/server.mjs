@@ -14,7 +14,10 @@ import {
   variants,
 } from "./lesson.mjs";
 
-const port = Number(process.env.PORT || 4173);
+const pilot = process.argv.includes("--poc");
+const port = Number(
+  pilot ? (process.env.POC_PORT ?? 4174) : (process.env.PORT ?? 4173),
+);
 const addr = Object.values(networkInterfaces())
   .flat()
   .find((n) => n?.family === "IPv4" && !n.internal);
@@ -65,12 +68,14 @@ function json(res, data) {
   res.end(JSON.stringify(data));
 }
 function cookie(req, name) {
+  if (pilot) name = "poc_" + name;
   return (req.headers.cookie || "")
     .split("; ")
     .find((v) => v.startsWith(name + "="))
     ?.slice(name.length + 1);
 }
 function setCookie(res, name, value) {
+  if (pilot) name = "poc_" + name;
   res.setHeader(
     "Set-Cookie",
     name +
@@ -109,6 +114,7 @@ function dashboard() {
   return {
     room,
     join,
+    pilot,
     live,
     canLive: Boolean(process.env.OPENAI_API_KEY),
     count: submitted.length,
@@ -120,7 +126,13 @@ function dashboard() {
       count: submitted.filter((p) => p.attempt.group === id).length,
       excerpts: submitted
         .filter((p) => p.share && p.attempt.group === id)
-        .map((p) => ({ id: p.reviewId, line: p.attempt.line })),
+        .map((p) => ({
+          id: p.reviewId,
+          line: p.attempt.line,
+          ...(p.photo
+            ? { photo: "/api/host/photo/" + p.reviewId + "?v=" + p.version }
+            : {}),
+        })),
     })),
     suggested: publicVariant(suggested),
     challenge: publicVariant(challenge),
@@ -132,6 +144,7 @@ function dashboard() {
 function studentView(p) {
   return {
     room,
+    pilot,
     lesson: studentLesson(),
     practice,
     challenge: publicVariant(challenge),
@@ -180,10 +193,28 @@ async function handle(req, res) {
   if (path.startsWith("/api/host/")) {
     if (cookie(req, "host") !== secret)
       fail(403, "Open the private presenter link printed by the server.");
+    if (pilot && req.method === "GET" && path.startsWith("/api/host/photo/")) {
+      const id = path.slice("/api/host/photo/".length);
+      const person = [...people.values()].find((p) => p.reviewId === id);
+      if (
+        !person?.share ||
+        !person.photo ||
+        String(person.version) !== url.searchParams.get("v")
+      )
+        fail(404, "That photo is no longer available.");
+      const [meta, data] = person.photo.split(",");
+      res.writeHead(200, {
+        "Content-Type": meta.slice(5, meta.indexOf(";")),
+        "Cache-Control": "private, no-store",
+      });
+      return res.end(Buffer.from(data, "base64"));
+    }
     if (path === "/api/host/state" && req.method === "GET")
       return json(res, dashboard());
     if (req.method !== "POST") fail(405, "Unsupported action.");
     const input = await body(req);
+    if (pilot && path !== "/api/host/correct")
+      fail(404, "This room is for sharing one step.");
     if (path === "/api/host/release") {
       challenge ??= recommend(
         [...people.values()].filter((p) => p.attempt).map((p) => p.attempt),
@@ -219,13 +250,15 @@ async function handle(req, res) {
         "Scan the room code on the projector or enter the six characters.",
       );
     if (!p) {
-      if (people.size >= 300) fail(429, "This demo room is full.");
+      if (people.size >= (pilot ? 20 : 300))
+        fail(429, "This demo room is full.");
       const token = randomBytes(20).toString("hex");
       p = {
         reviewId: randomBytes(8).toString("hex"),
         alias: "",
         attempt: null,
         share: false,
+        version: 0,
         scored: null,
         reviews: 0,
       };
@@ -239,6 +272,8 @@ async function handle(req, res) {
     return json(res, studentView(p));
   if (req.method !== "POST") fail(405, "Unsupported action.");
   const input = await body(req);
+  if (pilot && path !== "/api/attempt")
+    fail(404, "This room is for sharing one step.");
   if (path === "/api/attempt") {
     const text =
       typeof input.text === "string" ? input.text.trim().slice(0, 1500) : "";
@@ -262,9 +297,15 @@ async function handle(req, res) {
       if (live && !useLive) review.fallback = true;
       if (image && review.mode === "rehearsal" && !text)
         review.hint =
-          "Type the line from your photo so the rehearsal can group your step.";
+          pilot && input.share === true
+            ? "Your tutor can read the photo. You can add a line if you want to clarify it."
+            : "Type the line from your photo so the rehearsal can group your step.";
       p.attempt = review;
       p.share = input.share === true;
+      if (pilot) {
+        p.photo = p.share ? image : null;
+        p.version++;
+      }
     } finally {
       openReview.delete(p);
     }

@@ -61,15 +61,19 @@ function board() {
     '<p class="small">The first challenge point opens the board. Share an alias to appear here.</p>'
   );
 }
-function hostView() {
-  const groups = state.groups
+function renderGroups(groups, populatedOnly = false) {
+  return groups
+    .filter((g) => !populatedOnly || g.count > 0)
     .map(
       (
         g,
       ) => `<div class="group"><div class="spread"><b>${esc(g.title)}</b><strong>${g.count}</strong></div><div class="meter"><div style="width:${state.count ? (g.count * 100) / state.count : 0}%"></div></div>
-    ${g.excerpts.map((e) => `<div class="excerpt"><blockquote>${esc(e.line || "Unclear step")}</blockquote><label class="small">Group <select data-review="${esc(e.id)}">${state.groups.map((o) => `<option value="${o.id}" ${o.id === g.id ? "selected" : ""}>${esc(o.title)}</option>`).join("")}</select></label></div>`).join("")}</div>`,
+    ${g.excerpts.map((e) => `<div class="excerpt">${e.photo ? `<a href="${esc(e.photo)}" target="_blank" rel="noopener"><img class="preview" src="${esc(e.photo)}" alt="Notebook step, open full size"></a>` : ""}${e.line ? `<blockquote>${esc(e.line)}</blockquote>` : ""}<label class="small">Group <select data-review="${esc(e.id)}">${state.groups.map((o) => `<option value="${o.id}" ${o.id === g.id ? "selected" : ""}>${esc(o.title)}</option>`).join("")}</select></label></div>`).join("")}</div>`,
     )
     .join("");
+}
+function hostView() {
+  const groups = renderGroups(state.groups);
   const prediction = state.prediction;
   app.innerHTML = `<div class="head spread"><div><p class="eyebrow">Professor’s view</p><h1>The classroom</h1></div>${chip(state.live ? "Live AI" : "Rehearsal mode", !state.live)}</div>
     <div class="grid"><div class="stack">${problem()}<section class="card"><div class="spread"><div><p class="eyebrow">From submitted work</p><h2>Steps around the room</h2></div><div class="total">${state.count}</div></div><p class="small">${state.count} submitted · ${state.joined} joined. Revisions replace the student’s earlier step.</p>${groups}${state.fallbackCount ? `<p class="small">${state.fallbackCount} current review(s) used rehearsal feedback.</p>` : ""}</section></div>
@@ -81,18 +85,25 @@ function hostView() {
     <details class="details"><summary>Course reference &amp; rehearsal controls</summary><p><a href="${esc(state.lesson.reference)}" target="_blank" rel="noopener">OpenStax · Maxima and minima ↗</a></p>${state.canLive ? `<button data-action="mode">${state.live ? "Use rehearsal analysis" : "Use live analysis"}</button>` : "Rehearsal analysis is available on this server."}</details></div></div>`;
 }
 function attemptForm() {
-  return `<section class="card"><h2>Your first move</h2><p class="small">One line from your notebook is enough. This attempt is private and unscored.</p>
+  const lineNotice = state.pilot
+    ? state.live
+      ? "Your tutor can see the photo or typed step. AI reads it for the tutor."
+      : "Your tutor reads photos directly. Typed steps are grouped using prepared rules."
+    : state.live
+      ? "Submitted photos are sent to the AI for reading."
+      : "Rehearsal mode groups typed steps. For a photo, type the relevant line below.";
+  return `<section class="card"><h2>Your first move</h2><p class="small">${state.pilot ? "Send one unfinished line from your notebook to your tutor." : "One line from your notebook is enough. This attempt is private and unscored."}</p>
     <form data-form="attempt"><label class="upload">▧ &nbsp; ${photo ? "Change photo" : "Add a photo"}<input type="file" accept="image/*" id="photo"></label>
     <img class="preview" id="preview" ${photo ? `src="${photo}"` : "hidden"} alt="Your selected work">
-    <p class="small" id="mode-note">${state.live ? "Submitted photos are sent to the AI for reading." : "Rehearsal mode groups typed steps. For a photo, type the relevant line below."}</p>
+    <p class="small" id="mode-note">${lineNotice}</p>
     <label class="form-label">Your working<textarea id="step" maxlength="1500" placeholder="What would you try first?">${esc(draft)}</textarea></label>
-    <label class="check"><input id="share" type="checkbox" ${sharing ? "checked" : ""}> Let the professor show my anonymous line</label>
-    <button class="primary wide">Share my step →</button></form></section>`;
+    ${state.pilot ? "" : `<label class="check"><input id="share" type="checkbox" ${sharing ? "checked" : ""}> Let the professor show my anonymous line</label>`}
+    <button class="primary wide">${state.pilot ? "Send to tutor →" : "Share my step →"}</button></form></section>`;
 }
 function feedback() {
   const a = state.attempt;
   if (!a) return "";
-  return `<section class="card"><div class="spread"><h2>Your feedback</h2>${chip(a.mode === "live" ? "Live AI" : "Rehearsal feedback", a.mode !== "live")}</div>
+  return `<section class="card"><div class="spread"><h2>${state.pilot ? "Step sent" : "Your feedback"}</h2>${state.pilot && a.mode !== "live" ? "" : chip(a.mode === "live" ? "Live AI" : "Rehearsal feedback", a.mode !== "live")}</div>
     ${a.line ? `<p class="small">The step we read</p><blockquote>${esc(a.line)}</blockquote>` : ""}<p>${esc(a.hint)}</p>
     ${editing ? "" : '<button data-action="edit">Clarify or revise</button>'}</section>`;
 }
@@ -135,8 +146,23 @@ function projectorView() {
     ${state.challenge ? `<section class="card lavender"><p class="eyebrow">Now open on phones</p><h2>${esc(state.challenge.title)}</h2><p>${esc(state.challenge.prompt)}</p></section><section class="card"><h2>Standings</h2>${board()}</section>` : ""}</div>
     <section class="card display-join"><h2>Join the exercise</h2><img src="/qr.png" alt="Scan to join"><p class="mono">${esc(state.room)}</p><p>${state.count} submitted</p></section></div>`;
 }
+function pilotView() {
+  if (!host) {
+    app.className = "student";
+    app.innerHTML = `<div class="stack">${problem()}${feedback()}${!state.attempt || editing ? attemptForm() : ""}</div>`;
+    return;
+  }
+  app.innerHTML = `<div class="head"><p class="eyebrow">Analisi I · Tutor</p><h1>Students’ working</h1></div>
+    <div class="grid"><section class="card"><div class="spread"><h2>Steps received</h2><span class="total">${state.count}</span></div>
+    <p class="small">${state.count} submitted · ${state.joined} joined. ${state.live ? "AI groups are provisional." : "Prepared rules group text. Review photos yourself."}</p>
+    ${state.fallbackCount ? `<p class="small">AI was unavailable for ${state.fallbackCount} current submission(s). Review those steps.</p>` : ""}
+    ${state.count ? renderGroups(state.groups, true) : "<p>No steps yet.</p>"}</section>
+    <section class="card display-join"><h2>Join this exercise</h2><img src="/qr.png" alt="Scan to join the exercise"><p class="mono">${esc(state.room)}</p>
+    <a href="/board?room=${esc(state.room)}" target="_blank" rel="noopener">Project the exercise ↗</a> · <a href="${esc(state.join)}" target="_blank" rel="noopener">Student link ↗</a></section></div>`;
+}
 function render() {
-  if (host) hostView();
+  if (state.pilot && !projection) pilotView();
+  else if (host) hostView();
   else if (projection) projectorView();
   else studentView();
 }
@@ -216,7 +242,7 @@ app.addEventListener("submit", (e) => {
       state = await api("attempt", {
         text: draft,
         image: photo,
-        share: sharing,
+        share: state.pilot || sharing,
       });
       photo = "";
       editing = false;

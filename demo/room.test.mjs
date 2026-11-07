@@ -62,51 +62,101 @@ test("live analysis sends the photo and rubric, validates the response, and reco
   );
 });
 
+async function startRoom(t, ...flags) {
+  const child = spawn(
+    process.execPath,
+    [new URL("./server.mjs", import.meta.url).pathname, ...flags],
+    {
+      env: {
+        ...process.env,
+        PORT: "0",
+        POC_PORT: "0",
+        OPENAI_API_KEY: "",
+        PUBLIC_ORIGIN: "",
+      },
+      stdio: ["ignore", "pipe", "inherit"],
+    },
+  );
+  t.after(async () => {
+    if (child.exitCode === null) {
+      const closed = once(child, "exit");
+      child.kill();
+      await closed;
+    }
+  });
+  let logs = "";
+  for await (const part of child.stdout) {
+    logs += part;
+    if (logs.includes("Students:")) break;
+  }
+  const [, base, secret] = logs.match(
+    /Professor: (http:\/\/localhost:\d+)\/present#([a-f\d]+)/,
+  );
+  const [, room] = logs.match(/\?room=([A-F\d]+)/);
+  const api = async (path, payload, cookie = "") => {
+    const res = await fetch(base + "/api/" + path, {
+      method: payload ? "POST" : "GET",
+      headers: { cookie, "content-type": "application/json" },
+      body: payload ? JSON.stringify(payload) : undefined,
+    });
+    return {
+      status: res.status,
+      cookie: res.headers.get("set-cookie")?.split(";")[0],
+      value: await res.json(),
+    };
+  };
+  return { api, room, secret, base };
+}
+
+test(
+  "the pilot shares the current photo only with the tutor and replaces it on revision",
+  { timeout: 15000 },
+  async (t) => {
+    const { api, room, secret, base } = await startRoom(t, "--poc");
+    const host = (await api("host", { secret })).cookie;
+    const student = (await api("join", { room })).cookie;
+    const other = (await api("join", { room })).cookie;
+    const image = "data:image/png;base64,iVBORw0KGgo=";
+    const attempt = await api("attempt", { image, share: true }, student);
+    assert.equal(attempt.value.pilot, true);
+    assert.equal(attempt.value.attempt.mode, "rehearsal");
+    const state = (await api("host/state", undefined, host)).value;
+    const snippet = state.groups.find((g) => g.id === "unclear").excerpts[0];
+    assert.equal(state.count, 1);
+    for (const cookie of ["", student, other]) {
+      assert.equal(
+        (await fetch(base + snippet.photo, { headers: { cookie } })).status,
+        403,
+      );
+    }
+    const photo = await fetch(base + snippet.photo, {
+      headers: { cookie: host },
+    });
+    assert.equal(photo.headers.get("content-type"), "image/png");
+    assert.equal(
+      Buffer.from(await photo.arrayBuffer()).toString("base64"),
+      image.split(",")[1],
+    );
+    assert.equal(
+      (await api("host/correct", { id: snippet.id, group: "lost" }, host)).value
+        .groups[0].count,
+      1,
+    );
+    assert.equal((await api("host/release", {}, host)).status, 404);
+    await api("attempt", { text: "x=0 and x=1", share: true }, student);
+    assert.equal(
+      (await fetch(base + snippet.photo, { headers: { cookie: host } })).status,
+      404,
+    );
+    assert.equal((await api("host/state", undefined, host)).value.count, 1);
+  },
+);
+
 test(
   "two students share a room; predictions, observations, privacy, revisions and scoring stay distinct",
   { timeout: 15000 },
   async (t) => {
-    const child = spawn(
-      process.execPath,
-      [new URL("./server.mjs", import.meta.url).pathname],
-      {
-        env: {
-          ...process.env,
-          PORT: "0",
-          OPENAI_API_KEY: "",
-          PUBLIC_ORIGIN: "",
-        },
-        stdio: ["ignore", "pipe", "inherit"],
-      },
-    );
-    t.after(async () => {
-      if (child.exitCode === null) {
-        const closed = once(child, "exit");
-        child.kill();
-        await closed;
-      }
-    });
-    let logs = "";
-    for await (const part of child.stdout) {
-      logs += part;
-      if (logs.includes("Students:")) break;
-    }
-    const [, base, secret] = logs.match(
-      /Professor: (http:\/\/localhost:\d+)\/present#([a-f\d]+)/,
-    );
-    const [, room] = logs.match(/\?room=([A-F\d]+)/);
-    const api = async (path, payload, cookie = "") => {
-      const res = await fetch(base + "/api/" + path, {
-        method: payload ? "POST" : "GET",
-        headers: { cookie, "content-type": "application/json" },
-        body: payload ? JSON.stringify(payload) : undefined,
-      });
-      return {
-        status: res.status,
-        cookie: res.headers.get("set-cookie")?.split(";")[0],
-        value: await res.json(),
-      };
-    };
+    const { api, room, secret } = await startRoom(t);
     assert.equal((await api("host/state")).status, 403);
     const host = (await api("host", { secret })).cookie;
     const a = (await api("join", { room })).cookie;

@@ -2,6 +2,16 @@
 
 The first customer to approach is the teaching assistant who leads a first-year engineering **Analisi I esercitazione at PoliTO**, works through an exercise sheet on the board and has to decide which algebra step deserves class time. The first student is the first-year engineering student already copying that solution into a notebook or tablet, who has a partial line but would hesitate to raise a hand. The course coordinator is the person to approach about a second group after a TA asks to run it again. These are pilot hypotheses.
 
+## Start with the proof of concept
+
+From the repository root, run `npm ci` once, then `npm run poc`. Open the private tutor link it prints and click **Project the exercise**. Students on the same Wi-Fi scan the QR, try the Analisi I question and send one photo or typed step. The tutor sees the actual steps, provisional groups and the number of distinct submissions. A revision replaces the previous step. This room runs separately on port 4174 (override with `POC_PORT`).
+
+With a server-side API key, photos and text get live analysis. In rehearsal, the tutor reads photos directly and a few prepared rules group typed answers. The form tells students who can see their work. Photos are available only on the private tutor screen, held in memory until replaced or the room restarts.
+
+**Five-minute trial.** Invite one Analisi I tutor and five first-year students. Before showing the summary, have the tutor jot down what they planned to explain next. Project the exercise, start a timer, and invite each student to send the next line they would actually write. Avoid seeding mistakes or coaching anyone through the UI. At 90 seconds, record the number who sent a step unaided, including anyone who never joined. Ask the tutor to teach the next line as usual. Write down what they actually explained, which submission informed it, and whether they would bring another exercise.
+
+**Decision for the team.** Try a second tutorial if at least three of the five sent a step unaided within 90 seconds and the tutor can point to a submission that influenced what they explained or skipped. If participation was low, ask the non-submitters what got in the way. If the tutor learned nothing useful, try a problem from their own sheet once before adding features. These are proposed pilot thresholds. A rehearsal can test classroom usefulness; a live-key trial with real handwriting is needed to assess AI reading quality.
+
 ## Start a room
 
 Use Node 22.9 or later. From the repository root:
