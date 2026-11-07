@@ -101,5 +101,13 @@ export function splitQuestions(text) {
     .split(
       /\n\s*(?=(?:(?:exercise|question|problem|esercizio|domanda)\s+\d+\b|\d{1,2}[.)]\s+\S))/i,
     );
-  return lines.map((s) => s.trim()).filter((s) => s.length >= 5);
+  const parts =
+    lines.length > 1
+      ? lines
+      : text
+          .trim()
+          .split(
+            /(?<=\?)\s*\n(?=\S)|\n\s*\n(?=(?:Find|Explain|Evaluate|Calculate|Determine|Compute|Show|Why|How|What)\b)/i,
+          );
+  return parts.map((s) => s.trim()).filter((s) => s.length >= 5);
 }

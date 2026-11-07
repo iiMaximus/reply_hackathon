@@ -51,3 +51,23 @@ export function mathText(value) {
   }
   return html + escapeHTML(text.slice(end));
 }
+
+// Keep TeX out of Markdown's emphasis and escaping rules.
+export function classroomMarkdown(value) {
+  const md = window
+    .markdownit({ html: false, breaks: true, linkify: false })
+    .disable(["image", "link"]);
+  const slots = [];
+  let prefix = "SHOWWORKMATHX";
+  while (String(value).includes(prefix)) prefix += "X";
+  const protectedText = String(value ?? "").replace(delimited, (literal) => {
+    slots.push(mathText(literal));
+    return prefix + slots.length + "Z";
+  });
+  return md
+    .render(protectedText)
+    .replace(
+      new RegExp(prefix + "(\\d+)Z", "g"),
+      (_, i) => slots[Number(i) - 1],
+    );
+}

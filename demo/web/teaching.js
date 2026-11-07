@@ -1,4 +1,9 @@
-import { escapeHTML as h, mathText as math } from "/math.js";
+import reportExample from "/sample-report.js";
+import {
+  escapeHTML as h,
+  mathText as math,
+  classroomMarkdown as md,
+} from "/math.js";
 const actionIcons = {
   send: "send",
   publish: "radio",
@@ -45,6 +50,10 @@ let source = "",
   page = 1,
   exercises = [],
   exercise = 0;
+let worksheetRows = [],
+  worksheetMode = "sequence";
+let studentEvent = "",
+  notification = "";
 let studentId = "",
   answer = "",
   editing = false,
@@ -63,30 +72,9 @@ try {
   const data = JSON.parse(localStorage.getItem("showwork-progress") || "[]");
   if (Array.isArray(data)) saved = data.slice(0, 40);
 } catch {}
-const reportExample = {
-  id: "example",
-  topic: "Mechanics",
-  prompt:
-    "If a cantilever’s length and section height both double, what happens to tip deflection? Explain your reasoning.",
-  summary: {
-    total: 24,
-    reviewed: 24,
-    groups: [
-      {
-        label: "Used the cubic relationship for both length and height",
-        count: 11,
-      },
-      {
-        label: "Used a linear relationship between length and height",
-        count: 8,
-      },
-      { label: "Considered length alone", count: 3 },
-      { label: "Reasoning needs a closer look", count: 2 },
-    ],
-    move: "Double only the beam length. Ask students to compare the linear prediction with the cubic one.",
-  },
-};
 function loading() {
+  if (pending === "Preparing the class report")
+    return `<div class="report-progress" role="status"><span class="report-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span><div><strong>Preparing your class report</strong><small>Reviewing the class’s reasoning and planning the next teaching step.</small></div></div>`;
   return `<div id="open-progress" class="loading" role="status" ${pending ? "" : "hidden"}><progress ${percent === null ? "" : `max="100" value="${percent}"`}></progress><span>${h(pending)}${percent === null ? "" : " · " + percent + "%"}</span></div>`;
 }
 function progress(text, n = null) {
@@ -106,6 +94,7 @@ function progress(text, n = null) {
   }
 }
 function fileReset() {
+  worksheetRows = [];
   upload?.dispose?.();
   upload = null;
   asset = null;
@@ -159,7 +148,7 @@ function home(c) {
     <div class="or"><span>or paste the question</span></div>
     <label class="sr-only" for="open-source">Question text</label><textarea id="open-source" rows="4" maxlength="5000" placeholder="Paste one open question here.">${h(source)}</textarea><div class="actions">${btn("analyze", "Review question", true, source.trim().length < 8 ? "disabled" : "")}</div>
     ${c.draft ? btn("resume", "Continue with saved draft") : ""}</section>
-    <aside><section class="side-section"><h2>Course examples</h2>${c.examples.map((name, i) => btn("sample", name, false, `data-index="${i}"`)).join("")}</section>${reports(c)}</aside></div>`
+    <aside>${nextQuestion(c)}<section class="side-section"><h2>Course examples</h2>${c.examples.map((name, i) => btn("sample", name, false, `data-index="${i}"`)).join("")}</section>${reports(c)}</aside></div>`
   );
 }
 function uploadView() {
@@ -177,23 +166,49 @@ function uploadView() {
     ${field("open-source", "Text to use", source, 7, 5000)}<div class="actions">${btn("analyze", "Prepare this question", true, source.trim().length < 8 ? "disabled" : "")}</div></section>`
   );
 }
+function worksheetView() {
+  return (
+    btn("back", "Back to questions") +
+    heading("Plan your worksheet", upload?.name || "Pasted questions") +
+    `<section class="panel"><h2>Select questions</h2>${worksheetRows.map((row, i) => `<div class="worksheet-row"><label><input type="checkbox" data-select-row="${i}" ${row.selected ? "checked" : ""}> Question ${i + 1} · Page ${row.page}</label><textarea id="sheet-row-${i}" data-edit-row="${i}" aria-label="Question ${i + 1} wording" rows="2">${h(row.text)}</textarea></div>`).join("")}
+    <label for="worksheet-mode">How should students answer?</label><select id="worksheet-mode"><option value="sequence" ${worksheetMode === "sequence" ? "selected" : ""}>One question at a time</option><option value="together" ${worksheetMode === "together" ? "selected" : ""}>All together in one response</option></select>
+    <div class="actions">${btn("prepare-set", "Preview selected questions", true)}</div></section>`
+  );
+}
+function nextQuestion(c) {
+  const count = c.active?.remaining?.length;
+  return count && c.active.status === "closed"
+    ? btn(
+        "next-planned",
+        `Review next worksheet question (${count} remaining)`,
+        true,
+      )
+    : "";
+}
 function preview(value) {
-  const html = math(value);
-  return html === h(value)
-    ? ""
-    : '<small>Student preview</small><p class="question">' + html + "</p>";
+  return (
+    '<small>Student preview</small><div class="question rich">' +
+    md(value) +
+    "</div>"
+  );
 }
 function editor() {
   return (
     btn(
-      upload?.pages > 1 ? "pick-page" : "back",
-      upload?.pages > 1 ? "Back to worksheet" : "Back to questions",
+      worksheetRows.length
+        ? "back-set"
+        : upload?.pages > 1
+          ? "pick-page"
+          : "back",
+      worksheetRows.length || upload?.pages > 1
+        ? "Back to worksheet"
+        : "Back to questions",
     ) +
     heading(
       "Review question",
       "Only the question and any image you select will be shared.",
     ) +
-    `<section class="panel editor">${field("open-prompt", "Question students will see", draft.prompt, 4)}<div id="open-preview">${preview(draft.prompt)}</div>
+    `<section class="panel editor"><p class="muted">Format with Markdown and LaTeX. The preview shows what students will see.</p>${field("open-prompt", "Question students will see", draft.prompt, 4)}<div id="open-preview">${preview(draft.prompt)}</div>
     ${asset?.image ? `<details data-preserve="attachment"><summary>Original image</summary><img class="question-image" src="${h(asset.image)}" alt="Uploaded page"></details><label class="check"><input type="checkbox" id="open-attach" ${attach ? "checked" : ""}> Also show this image to students</label>` : ""}
     <label class="field" for="open-topic">Topic</label><input id="open-topic" maxlength="100" placeholder="Optional" value="${h(draft.topic)}">
     ${field("open-ref", "Private reference answer", draft.reference, 3, 1000)}
@@ -231,7 +246,7 @@ function live(c) {
         ? "Finishing the class report"
         : "Open for responses",
     ) +
-    `<div class="columns"><section class="panel"><p class="question">${math(r.prompt)}</p>${imageOf(r)}${stats(s)}
+    `<div class="columns"><section class="panel"><div class="question rich">${md(r.prompt)}</div>${imageOf(r)}${stats(s)}
     <h2>Live reasoning patterns</h2>${breakdown(s)}<div class="actions">${btn("close", "Close and view report", true, r.status === "closing" ? "disabled" : "")}<span class="muted">${c.connected} student device${c.connected === 1 ? "" : "s"} connected</span></div></section>${invite()}</div>`
   );
 }
@@ -241,11 +256,15 @@ function report(r) {
     heading(
       "Class report",
       r.id === "example"
-        ? "Example data from a mechanics tutorial."
+        ? "Six synthetic responses with a sample teaching exercise."
         : "Anonymous responses to the class question.",
     ) +
-    `<section class="panel"><p class="question">${math(r.prompt)}</p>${stats(r.summary)}<div class="report-grid"><section><h2>Reasoning patterns</h2>${breakdown(r.summary)}</section>
-    <section><h2>${icon("presentation")} What to teach next</h2>${r.summary.practiceTopic ? `<h3 class="focus-topic">${icon("target")} ${math(r.summary.practiceTopic)}</h3>` : ""}<p>${math(r.summary.move || "There are no responses to interpret.")}</p>${r.summary.engine ? `<small>${h(r.summary.engine)}</small>` : ""}</section></div></section><div class="actions">${btn("back", "Prepare another question", true)}</div>`
+    `<section class="panel"><div class="question rich">${md(r.prompt)}</div>${stats(r.summary)}<div class="report-grid"><section><h2>Reasoning patterns</h2>${breakdown(r.summary)}
+    ${r.summary.evidence?.length ? `<h3>Observed mistakes</h3><ul>${r.summary.evidence.map((entry) => `<li>${math(entry.error)} <strong>(${entry.count})</strong></li>`).join("")}</ul>` : ""}
+    ${r.summary.unclear ? `<p>${r.summary.unclear} response(s) had too little evidence to diagnose.</p>` : ""}</section>
+    <section><h2>${icon("presentation")} What to teach next</h2>${r.summary.practiceTopic ? `<h3 class="focus-topic">${icon("target")} ${math(r.summary.practiceTopic)}</h3>` : ""}<p>${math(r.summary.move || "There are no responses to interpret.")}</p>${r.summary.boardExample ? `<h3>Show on the board</h3><div class="rich">${md(r.summary.boardExample)}</div>` : ""}
+    ${r.summary.check ? `<h3>Check understanding</h3><div class="rich">${md(r.summary.check)}</div><details><summary>Expected reasoning</summary>${md(r.summary.expected)}</details>` : ""}
+    ${r.summary.engine ? `<small>${h(r.summary.engine)}</small>` : ""}</section></div></section><div class="actions">${(state.classroom.active?.id === r.id && nextQuestion(state.classroom)) || btn("back", "Prepare another question", true)}</div>`
   );
 }
 function teacher(c) {
@@ -257,6 +276,7 @@ function teacher(c) {
         : [c.active, ...c.history].find((r) => r?.id === reportId);
     if (r) return report(r);
   }
+  if (screen === "worksheet" && worksheetRows.length) return worksheetView();
   if (screen === "upload" && upload) return uploadView();
   if (screen === "edit" && c.draft) {
     if (draftId !== c.draft.id) {
@@ -299,6 +319,22 @@ function student(c) {
     tab = "class";
   }
   remember(r, v);
+  const event = [
+    r?.id,
+    r?.status,
+    v?.result ? v.text + (v.photo || "") : "",
+  ].join("|");
+  if (event !== studentEvent) {
+    notification =
+      v?.result && r?.status === "open"
+        ? "Your private feedback is ready."
+        : r?.status === "closed"
+          ? "The professor closed this question."
+          : r?.status === "open"
+            ? "Your professor opened a question."
+            : "";
+    studentEvent = event;
+  }
   if (c.nickname == null) {
     if (rememberedAlias !== null && !restoringAlias) {
       restoringAlias = true;
@@ -350,7 +386,7 @@ function student(c) {
       heading("My work", "Your responses are saved on this browser.") +
       `<section class="panel">${
         item
-          ? `${btn("progress", "All responses")}<p class="question">${math(item.prompt)}</p><h2>Your response</h2><p class="written">${math(item.text)}</p><h2>Feedback</h2>${feedback(item)}`
+          ? `${btn("progress", "All responses")}<div class="question rich">${md(item.prompt)}</div><h2>Your response</h2><p class="written">${math(item.text)}</p><h2>Feedback</h2>${feedback(item)}`
           : saved.length
             ? saved
                 .map((x) =>
@@ -373,7 +409,7 @@ function student(c) {
     status(
       r.status === "open" ? "Open for responses" : "Closed for responses",
     ) +
-    `<section class="panel"><p class="question">${math(r.prompt)}</p>${imageOf(r)}`;
+    `<section class="panel"><div class="question rich">${md(r.prompt)}</div>${imageOf(r)}`;
   if (v && (!editing || r.status !== "open")) {
     html += `<div class="sent-badge">${icon("circle-check")} Response submitted</div><h2>Your response</h2><p class="written">${math(v.text)}</p>${v.photo ? `<img class="question-image" src="${h(v.photo)}" alt="Your submitted working">` : ""}<div class="feedback"><h2>Private feedback</h2>${feedback(v.result)}
     ${v.result ? `<small>${h(v.result.engine)}</small>` : ""}</div>
@@ -391,7 +427,7 @@ function board(c) {
   const r = c.active,
     open = r?.status === "open";
   return `<div class="board-layout"><section>${open ? roundHeading(r) + status("Open for responses") : heading("Join the class")}
-    ${open ? `<p class="question">${math(r.prompt)}</p>${imageOf(r)}<p>${r.total} response${r.total === 1 ? "" : "s"} received</p>` : `<p>${r ? "Responses are closed." : "Waiting for the professor to open a question."}</p>`}</section>${invite(true)}</div>`;
+    ${open ? `<div class="question rich">${md(r.prompt)}</div>${imageOf(r)}<p>${r.total} response${r.total === 1 ? "" : "s"} received</p>` : `<p>${r ? "Responses are closed." : "Waiting for the professor to open a question."}</p>`}</section>${invite(true)}</div>`;
 }
 export function paintTeaching(el, next, view, actions) {
   root = el;
@@ -416,6 +452,9 @@ export function paintTeaching(el, next, view, actions) {
   root.className = "room-" + role;
   root.innerHTML =
     (role === "host" ? teacher(c) : role === "board" ? board(c) : student(c)) +
+    (role === "student" && state.classroom.nickname != null && notification
+      ? `<div class="class-notice" role="status">${h(notification)}${btn("dismiss-notice", "Dismiss")}</div>`
+      : "") +
     loading() +
     `<p class="error" role="alert" ${error ? "" : "hidden"}>${h(error)}</p><p class="offline" role="status" hidden>Reconnecting to the classroom…</p>`;
   if (pending)
@@ -490,12 +529,80 @@ async function fileChosen(file) {
   const reader = await import("/uploads.js");
   splitText = reader.splitQuestions;
   upload = await reader.openFile(file);
+  if (upload.pages > 1 || /\.(pdf|txt|md)$/i.test(file.name)) {
+    const items = [];
+    for (let i = 1; i <= upload.pages; i++) {
+      progress(`Reading page ${i} of ${upload.pages}`);
+      const material = await upload.page(i);
+      const text =
+        material.text ||
+        (material.image
+          ? await reader.recognize(material.image, progress)
+          : "");
+      const parts = reader.splitQuestions(text);
+      for (const part of parts.length ? parts : [""])
+        items.push({ page: i, text: part, selected: !!part });
+    }
+    worksheetRows = items;
+    screen = "worksheet";
+    return;
+  }
   await readPage(1);
+  if (exercises.length > 1) {
+    worksheetRows = exercises.map((text) => ({
+      page: 1,
+      text,
+      selected: true,
+    }));
+    screen = "worksheet";
+  }
 }
 async function act(b) {
   const a = b.dataset.actionOpen,
     c = state.classroom;
   error = "";
+  if (a === "dismiss-notice") {
+    notification = "";
+    controls.draw();
+    return;
+  }
+  if (a === "next-planned") {
+    const [text, ...remaining] = c.active.remaining;
+    return task("Preparing next question", () =>
+      analyze({ text, remaining, authored: true }),
+    );
+  }
+  if (a === "prepare-set") {
+    const items = worksheetRows
+      .filter((row) => row.selected)
+      .map((row) => row.text.trim());
+    if (!items.length || items.some((x) => x.length < 8)) {
+      error = "Select at least one question and check its wording.";
+      controls.draw();
+      return;
+    }
+    const together = worksheetMode === "together" && items.length > 1;
+    const text = together
+      ? items
+          .map(
+            (t, i) =>
+              `**Question ${i + 1}**\n\n${t.replace(/^\d+[.)]\s+/, "")}`,
+          )
+          .join("\n\n")
+      : items[0];
+    asset =
+      upload && items.length === 1
+        ? await upload.page(worksheetRows.find((row) => row.selected).page)
+        : null;
+    return task("Preparing worksheet", () =>
+      analyze({
+        text,
+        authored: true,
+        bundle: together,
+        remaining: together ? [] : items.slice(1),
+      }),
+    );
+  }
   if (a === "standings") {
     tab = "standings";
     controls.draw();
@@ -516,8 +623,25 @@ async function act(b) {
       } catch {}
     });
   }
-  if (a === "analyze")
-    return task("Preparing question", () => analyze({ text: source }));
+  if (a === "analyze") {
+    if (screen !== "upload") {
+      const reader = await import("/uploads.js"),
+        parts = reader.splitQuestions(source);
+      if (parts.length > 1) {
+        worksheetRows = parts.map((text) => ({
+          page: 1,
+          text,
+          selected: true,
+        }));
+        screen = "worksheet";
+        controls.draw();
+        return;
+      }
+    }
+    return task("Preparing question", () =>
+      analyze({ text: source, authored: screen !== "upload" }),
+    );
+  }
   if (a === "sample") {
     fileReset();
     return task("Reading course example", () =>
@@ -554,6 +678,7 @@ async function act(b) {
     fileReset();
   }
   if (a === "pick-page") screen = "upload";
+  if (a === "back-set") screen = "worksheet";
   if (a === "resume") screen = "edit";
   if (a === "report") {
     reportId = b.dataset.id;
@@ -587,6 +712,11 @@ document.addEventListener("click", (e) => {
 document.addEventListener("input", (e) => {
   const el = e.target;
   if (!root?.contains(el)) return;
+  if (el.dataset.editRow !== undefined)
+    worksheetRows[Number(el.dataset.editRow)].text = el.value;
+  if (el.dataset.selectRow !== undefined)
+    worksheetRows[Number(el.dataset.selectRow)].selected = el.checked;
+  if (el.id === "worksheet-mode") worksheetMode = el.value;
   if (el.id === "open-alias") aliasInput = el.value;
   if (el.id === "open-source") {
     source = el.value;

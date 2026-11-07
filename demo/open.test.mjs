@@ -171,3 +171,19 @@ test("a photo goes to the vision model, stays private, and revisions earn one pa
   ]);
   assert.ok(!JSON.stringify(room.host()).includes(photoId));
 });
+
+test("an approved worksheet keeps the next question private until it is published", async () => {
+  const room = openClassroom({ cloud: { enabled: false } });
+  const text = "**Evaluate** the limit of \\(x^2\\).",
+    next = "Explain which assumption you used.";
+  await room.analyze({ text, authored: true, remaining: [next] });
+  await room.publish(room.host().draft);
+  assert.equal(room.board().prompt, text);
+  assert.ok(!JSON.stringify(room.student({})).includes(next));
+  await room.close(room.board().id);
+  assert.deepEqual(room.host().active.remaining, [next]);
+  await room.analyze({ text: next, authored: true, remaining: [] });
+  await room.publish(room.host().draft);
+  assert.equal(room.board().prompt, next);
+  assert.equal(room.host().history[0].prompt, text);
+});

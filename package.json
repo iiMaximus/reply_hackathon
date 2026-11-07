@@ -22,6 +22,7 @@
     "@tesseract.js-data/ita": "1.0.0",
     "katex": "0.19.1",
     "lucide-static": "1.70.0",
+    "markdown-it": "15.0.3",
     "onnxruntime-web": "1.22.0",
     "pdfjs-dist": "6.4.299",
     "qrcode": "^1.5.4",

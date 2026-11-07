@@ -73,5 +73,8 @@ for (const r of results) {
   }
 }
 assert.equal(report.reviewed, cases.length);
+assert.ok(report.evidence.length >= 2);
+assert.ok(report.boardExample && report.check && report.expected);
+assert.equal(report.unclear, 1);
 assert.equal(report.engine, cloud.model);
 assert.ok(hasConstant(report.practiceTopic + " " + report.move), report.move);

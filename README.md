@@ -1,13 +1,28 @@
-# reply_hackathon
+# Showwork
 
-Reply Student Tech Clash 2026 · AI on Campus
+Showwork helps a university tutor decide which step to explain next. During an Analisi I exercise, students can arrive at 42 by dropping a constant, by making an arithmetic error, or by guessing. Showwork reads their working, gives each student private feedback, and shows the professor which mistakes appeared across the room.
 
-## Showwork
+**Reply Student Tech Clash 2026 · AI on Campus · Coding track**
 
-[Student room](https://solution-room-demo.onrender.com/join) · [Class projector](https://solution-room-demo.onrender.com/board) · [Run the demo](demo/README.md#run-an-open-question)
+[Student room](https://solution-room-demo.onrender.com/join) · [Projector and QR](https://solution-room-demo.onrender.com/board) · [Finalist slides](submission/Showwork.pdf) · [Editable PowerPoint](submission/Showwork.pptx)
 
-Showwork helps a university instructor see how a class approached an open question. Upload a photo or worksheet, review the exact question and private reference, and open it for the room. Students write their own response and see private feedback. The professor sees anonymous reasoning patterns as submissions arrive and can decide which step to explain next.
+## Submission materials
 
-Run it with Node 22.16 or newer and `npm ci && npm start`. The terminal prints the private professor link. `npm run demo` opens the offline rehearsal. `npm test` checks the classroom API and `npm run test:model` exercises the local model. For server-side Luna analysis, set `OPENAI_API_KEY` on the host.
+| Judges’ deliverable | Where to find it |
+| --- | --- |
+| Problem, audience, proposed impact, one-minute pitch and five-minute demo plan | [Presenter notes](submission/pitch.md) |
+| Working prototype, setup, models and architecture | [Technical guide](demo/README.md) |
+| Example interactions, including uncertainty | [Six synthetic responses and their actual feedback](submission/classroom-evaluation.md) |
+| Sample questions for a live demonstration | [Two-question worksheet](submission/demo-worksheet.md) |
 
-The [demo guide](demo/README.md) also describes the earlier worked-step notebook. [Original classroom proposal](ai-classroom-feedback-proposal.md) · [Idea discussion](DEBATE.md)
+## Run a classroom
+
+Use Node 22.16 or newer. Run `npm ci` and `npm start`. The server prints a private professor link. Open it on the instructor’s laptop and project the public QR. Students join from their phones without a room code.
+
+For live Luna feedback and direct photo review, copy `.env.example` to `.env`, set the server-side `OPENAI_API_KEY` and restart. With no key, the local model supports text and course examples. For a deterministic rehearsal use `npm run demo`. On the hosted service the organizer holds the professor link.
+
+Upload the sample worksheet. Select one question, open several as one shared response, or release them one at a time. Preview Markdown and LaTeX before publishing. A student can type a step or submit a photo. Close the question for a class report, a worked teaching example and a fresh check. **View example report** on the professor home page opens the saved synthetic class.
+
+## Evidence
+
+The live evaluation exercised correct reasoning, two different omissions of the constant, a correct number reached with an invalid rule, and an unsupported answer. The prototype also reviewed an image of a weighted-mean calculation. Student learning gains still need a real classroom pilot. [Live evaluation](https://github.com/iiMaximus/reply_hackathon/actions/runs/42384041491) · [Pilot measures](submission/pitch.md)

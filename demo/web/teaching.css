@@ -505,36 +505,93 @@ body.open-room {
 }
 
 /* A shared round marker helps students match their phone to the projector. */
-.open-room { --action: #443db3; }
+.open-room {
+  --action: #443db3;
+}
 .open-room .brand::before {
-  content: ""; display: inline-block; width: .6em; height: .6em;
-  margin-right: .55em; border-radius: 3px; background: var(--action);
-  transform: rotate(-12deg); box-shadow: 3px 3px 0 #ffbe80;
+  content: "";
+  display: inline-block;
+  width: 0.6em;
+  height: 0.6em;
+  margin-right: 0.55em;
+  border-radius: 3px;
+  background: var(--action);
+  transform: rotate(-12deg);
+  box-shadow: 3px 3px 0 #ffbe80;
 }
 .round-heading {
-  display: flex; align-items: center; gap: 14px; margin: 18px 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 18px 0;
 }
-.round-heading h1 { margin: 0; }
-.round-heading small { color: var(--muted); font-weight: 550; }
+.round-heading h1 {
+  margin: 0;
+}
+.round-heading small {
+  color: var(--muted);
+  font-weight: 550;
+}
 .round-tile {
-  flex: 0 0 48px; height: 48px; border-radius: 12px; display: grid;
-  place-items: center; background: #e8e4ff; color: #5346b1;
+  flex: 0 0 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #e8e4ff;
+  color: #5346b1;
 }
-.round-tile i { width: 20px; height: 20px; background: currentColor; border-radius: 3px; transform: rotate(45deg); }
-.mark-1 .round-tile { background: #ffe7ca; color: #a54918; }
-.mark-1 i { clip-path: polygon(50% 0,100% 100%,0 100%); transform: none; border-radius: 0; }
-.mark-2 .round-tile { background: #d8f2ee; color: #13756e; }
-.mark-2 i { border-radius: 50%; }
-.status-line.is-live, .sent-badge {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 4px 11px; border-radius: 20px; background: #e4f4ed;
-  color: #205d46; font-size: 14px; font-weight: 600;
+.round-tile i {
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  border-radius: 3px;
+  transform: rotate(45deg);
 }
-.is-live .status-dot { background: #26815c; }
-.sent-badge { margin: 4px 0 14px; }
-.sent-badge span { font-size: 16px; }
-.open-room button.primary:hover, .open-room .upload-area .file-button:hover { background: #35308c; }
-.open-room .board-layout > section { min-width: 0; }
+.mark-1 .round-tile {
+  background: #ffe7ca;
+  color: #a54918;
+}
+.mark-1 i {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  transform: none;
+  border-radius: 0;
+}
+.mark-2 .round-tile {
+  background: #d8f2ee;
+  color: #13756e;
+}
+.mark-2 i {
+  border-radius: 50%;
+}
+.status-line.is-live,
+.sent-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 11px;
+  border-radius: 20px;
+  background: #e4f4ed;
+  color: #205d46;
+  font-size: 14px;
+  font-weight: 600;
+}
+.is-live .status-dot {
+  background: #26815c;
+}
+.sent-badge {
+  margin: 4px 0 14px;
+}
+.sent-badge span {
+  font-size: 16px;
+}
+.open-room button.primary:hover,
+.open-room .upload-area .file-button:hover {
+  background: #35308c;
+}
+.open-room .board-layout > section {
+  min-width: 0;
+}
 .lucide-icon {
   display: inline-block;
   width: 1.08em;
@@ -542,9 +599,136 @@ body.open-room {
   flex: none;
   background: currentColor;
   mask: var(--icon) center / contain no-repeat;
-  vertical-align: -.15em;
+  vertical-align: -0.15em;
 }
-.open-room button:has(.lucide-icon), .open-room .file-button { gap: .45em; }
-.open-room .feedback h3, .open-room .focus-topic { font-size: 1rem; margin: 1em 0 .25em; color: var(--action); }
-.standing { display: flex; justify-content: space-between; gap: 16px; padding: .65em 0; border-bottom: 1px solid var(--line); }
-#open-alias { display: block; margin: .5em 0; width: min(100%, 22em); }
+.open-room button:has(.lucide-icon),
+.open-room .file-button {
+  gap: 0.45em;
+}
+.open-room .feedback h3,
+.open-room .focus-topic {
+  font-size: 1rem;
+  margin: 1em 0 0.25em;
+  color: var(--action);
+}
+.standing {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0.65em 0;
+  border-bottom: 1px solid var(--line);
+}
+#open-alias {
+  display: block;
+  margin: 0.5em 0;
+  width: min(100%, 22em);
+}
+
+.room-host .heading {
+  margin-bottom: 18px;
+}
+.room-host .editor {
+  max-width: 760px;
+}
+.room-host .panel > .report-grid {
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+.room-host .report-grid h3 {
+  margin: 18px 0 5px;
+  font-size: 1rem;
+}
+.room-host .report-grid li {
+  margin-bottom: 0.45em;
+}
+.rich {
+  white-space: normal;
+}
+.open-room .rich p {
+  margin: 0.45em 0;
+}
+.rich > :first-child {
+  margin-top: 0;
+}
+.rich > :last-child {
+  margin-bottom: 0;
+}
+.open-room .rich :is(h1, h2, h3) {
+  font-size: 1.08em;
+  margin: 0.8em 0 0.3em;
+}
+.rich ul,
+.rich ol {
+  padding-left: 1.5em;
+}
+.open-room .worksheet-row {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.worksheet-row label {
+  font-weight: 600;
+}
+.worksheet-row input {
+  width: auto;
+}
+.class-notice,
+.report-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 1px solid #cfc9ec;
+  border-radius: 8px;
+  background: #f5f3fc;
+}
+.class-notice {
+  justify-content: space-between;
+}
+.report-progress {
+  position: sticky;
+  bottom: 12px;
+  box-shadow: 0 4px 18px #26224618;
+}
+.report-progress small {
+  display: block;
+}
+.report-bars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+}
+.report-bars i {
+  background: #594cad;
+  width: 5px;
+  height: 24px;
+  border-radius: 3px;
+  animation: report-wave 1.2s ease-in-out infinite alternate;
+}
+.report-bars i:nth-child(2) {
+  animation-delay: -0.3s;
+}
+.report-bars i:nth-child(3) {
+  animation-delay: -0.6s;
+}
+.report-bars i:nth-child(4) {
+  animation-delay: -0.9s;
+}
+@keyframes report-wave {
+  from {
+    transform: scaleY(0.3);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .report-bars i {
+    animation: none;
+  }
+}
+.class-notice button { flex: none; white-space: nowrap; }

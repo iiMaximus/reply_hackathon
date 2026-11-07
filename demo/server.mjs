@@ -127,6 +127,14 @@ const classroomIcons = [
   "presentation",
 ];
 const files = {
+  "/sample-report.js": [new URL("sample-report.js", web),"text/javascript; charset=utf-8"],
+  "/markdown.js": [
+    new URL(
+      "../node_modules/markdown-it/dist/browser/markdown-it.umd.min.js",
+      import.meta.url,
+    ),
+    "text/javascript; charset=utf-8",
+  ],
   ...Object.fromEntries(
     classroomIcons.map((name) => [
       "/icons/" + name + ".svg",
