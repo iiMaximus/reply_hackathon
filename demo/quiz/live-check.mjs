@@ -8,11 +8,18 @@ if (!process.env.OPENAI_API_KEY)
     "The trusted main-branch workflow needs the OPENAI_KEY Actions secret.",
   );
 // Use a fictional class. A local fallback must never pass this live check.
-let calls = 0;
+let calls = 0,
+  languageRepairs = 0;
 const cloud = cloudClient({
   enabled: true,
   fetcher: async (url, options) => {
-    if (url !== "https://api.openai.com/v1/responses" || ++calls > 5)
+    const repair = ["feedback_language", "report_language"].includes(
+      JSON.parse(options.body).text.format.name,
+    );
+    if (
+      url !== "https://api.openai.com/v1/responses" ||
+      (repair ? ++languageRepairs > 3 : ++calls > 5)
+    )
       throw Error("Unexpected live-check request");
     const res = await fetch(url, options);
     if (!res.ok) {

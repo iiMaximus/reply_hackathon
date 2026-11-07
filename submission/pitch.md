@@ -21,6 +21,8 @@ Our next test is one real tutorial. We want to see whether that report changes w
 | 3:35–4:20 | Show how the agent checked the evidence and where it deferred. For an architecture question, show the bounded tool loop in the worked-step notebook. |
 | 4:20–4:50 | Describe the proposed pilot. Leave ten seconds for transitions. |
 
+**Pitch shortcut.** In the professor portal choose **Run demo with 10 mock answers**. The rehearsal uses the [exact example question](demo-question.png). Expand **See all 10 mock answers** to compare the simulated working and private feedback. Reopening the result reuses the same reviewed batch. Real class responses and participation points stay separate.
+
 ## Rehearsal and handoff
 
 Before presenting, open the professor link on the laptop, the projector in a second tab, and the student room on a phone. Wake the hosted service, test its QR and confirm the photo option is available. Keep the professor access link off the projector. Keep the PDF deck and example report available locally. If connectivity fails, use the local rehearsal and explain which outputs are simulated.
