@@ -503,3 +503,35 @@ body.open-room {
     font-size: 13px;
   }
 }
+
+/* A shared round marker helps students match their phone to the projector. */
+.open-room { --action: #443db3; }
+.open-room .brand::before {
+  content: ""; display: inline-block; width: .6em; height: .6em;
+  margin-right: .55em; border-radius: 3px; background: var(--action);
+  transform: rotate(-12deg); box-shadow: 3px 3px 0 #ffbe80;
+}
+.round-heading {
+  display: flex; align-items: center; gap: 14px; margin: 18px 0;
+}
+.round-heading h1 { margin: 0; }
+.round-heading small { color: var(--muted); font-weight: 550; }
+.round-tile {
+  flex: 0 0 48px; height: 48px; border-radius: 12px; display: grid;
+  place-items: center; background: #e8e4ff; color: #5346b1;
+}
+.round-tile i { width: 20px; height: 20px; background: currentColor; border-radius: 3px; transform: rotate(45deg); }
+.mark-1 .round-tile { background: #ffe7ca; color: #a54918; }
+.mark-1 i { clip-path: polygon(50% 0,100% 100%,0 100%); transform: none; border-radius: 0; }
+.mark-2 .round-tile { background: #d8f2ee; color: #13756e; }
+.mark-2 i { border-radius: 50%; }
+.status-line.is-live, .sent-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 11px; border-radius: 20px; background: #e4f4ed;
+  color: #205d46; font-size: 14px; font-weight: 600;
+}
+.is-live .status-dot { background: #26815c; }
+.sent-badge { margin: 4px 0 14px; }
+.sent-badge span { font-size: 16px; }
+.open-room button.primary:hover, .open-room .upload-area .file-button:hover { background: #35308c; }
+.open-room .board-layout > section { min-width: 0; }

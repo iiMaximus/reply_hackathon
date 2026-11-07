@@ -6,9 +6,14 @@ const field = (id, label, value, rows = 3, max = 3000) =>
 const picker = (id, label, accept) =>
   `<label class="file-button">${h(label)}<input id="${id}" type="file" accept="${accept}"></label>`;
 const status = (label) =>
-  `<div class="status-line"><span class="status-dot"></span>${h(label)}</div>`;
+  `<div class="status-line ${label === "Open for responses" ? "is-live" : ""}"><span class="status-dot"></span>${h(label)}</div>`;
 const heading = (title, desc = "") =>
   `<div class="heading"><h1>${math(title)}</h1>${desc ? `<p>${h(desc)}</p>` : ""}</div>`;
+// The same question carries the same visual marker on every device.
+function roundHeading(r) {
+  const variant = [...r.id].reduce((sum, c) => sum + c.charCodeAt(0), 0) % 3;
+  return `<div class="round-heading mark-${variant}"><span class="round-tile" aria-hidden="true"><i></i></span><div><small>Class question</small><h1>${math(r.topic || "Open response")}</h1></div></div>`;
+}
 let controls,
   root,
   role,
@@ -199,7 +204,7 @@ function live(c) {
   const r = c.active,
     s = r.summary;
   return (
-    heading(r.topic || "Class question") +
+    roundHeading(r) +
     status(
       r.status === "closing"
         ? "Finishing the class report"
@@ -293,13 +298,13 @@ function student(c) {
     );
   let html =
     nav +
-    heading(r.topic || "Class question") +
+    roundHeading(r) +
     status(
       r.status === "open" ? "Open for responses" : "Closed for responses",
     ) +
     `<section class="panel"><p class="question">${math(r.prompt)}</p>${imageOf(r)}`;
   if (v && (!editing || r.status !== "open")) {
-    html += `<h2>Your response</h2><p class="written">${math(v.text)}</p><div class="feedback"><h2>Private feedback</h2><p>${math(v.result?.hint || "The agent is reading your response.")}</p>
+    html += `<div class="sent-badge"><span aria-hidden="true">✓</span> Response submitted</div><h2>Your response</h2><p class="written">${math(v.text)}</p><div class="feedback"><h2>Private feedback</h2><p>${math(v.result?.hint || "The agent is reading your response.")}</p>
     ${v.result ? `<small>${h(v.result.engine)}</small>` : "<progress></progress>"}</div>
     ${r.status === "open" && v.result ? btn("revise", "Revise response") : ""}`;
   } else if (r.status === "open") {
@@ -314,7 +319,7 @@ function student(c) {
 function board(c) {
   const r = c.active,
     open = r?.status === "open";
-  return `<div class="board-layout"><section>${heading(open ? r.topic || "Class question" : "Join the class")}
+  return `<div class="board-layout"><section>${open ? roundHeading(r) + status("Open for responses") : heading("Join the class")}
     ${open ? `<p class="question">${math(r.prompt)}</p>${imageOf(r)}<p>${r.total} response${r.total === 1 ? "" : "s"} received</p>` : `<p>${r ? "Responses are closed." : "Waiting for the professor to open a question."}</p>`}</section>${invite(true)}</div>`;
 }
 export function paintTeaching(el, next, view, actions) {
