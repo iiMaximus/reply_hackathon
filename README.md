@@ -2,6 +2,8 @@
 
 Reply Student Tech Clash 2026 · AI on Campus
 
+**Current first choice to pilot at PoliTO:** the professor asks a live question, the agent finds a second question that separates competing explanations, and each student leaves with a private exercise they have already started. The [agent debate and live demo brief](DEBATE.md) records the objections, competing ideas, and what to test.
+
 ## Revised shortlist
 
 These seven concepts give students a concrete first move and produce evidence that a lecturer or judge can inspect. The earlier brainstorm below records how the ideas evolved. For the problem of starting a study session, my first choice to test is **Case 4.00**.
