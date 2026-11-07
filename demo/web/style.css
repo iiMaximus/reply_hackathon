@@ -2018,3 +2018,49 @@ body.workroom header {
   max-width: 62ch;
   margin: 0 0 15px;
 }
+.tutor-main .lesson-strip {
+  background: #fbfaf3;
+  padding: 18px 20px;
+  border: 1px solid #d3d6c9;
+  border-radius: 7px;
+  grid-template-columns: 1.1fr auto;
+}
+.tutor-main .lesson-strip h1 {
+  font-size: 34px;
+}
+.tutor-main .lesson-formula {
+  font-size: 30px;
+}
+.workroom .next-move {
+  border-left-color: #bb603d;
+}
+.projection .lesson-strip {
+  display: block;
+  background: #fcfbf3;
+  border: 1px solid #d3d6c9;
+  padding: clamp(20px, 4vw, 50px);
+  border-radius: 7px;
+}
+.projection .lesson-strip h1 {
+  font-size: clamp(44px, 5.8vw, 84px);
+}
+.projection .lesson-formula {
+  margin-top: 26px;
+  font-size: clamp(38px, 4.5vw, 67px);
+}
+.projection .lesson-strip p:not(.folio-kicker) {
+  font-size: clamp(17px, 2vw, 25px);
+}
+.workroom .qr-code {
+  font-family: DM, system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+@media (max-width: 760px) {
+  .tutor-main .lesson-strip {
+    grid-template-columns: 1fr;
+  }
+  .tutor-main .lesson-formula {
+    justify-self: start;
+  }
+}

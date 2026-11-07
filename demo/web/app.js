@@ -165,54 +165,10 @@ function roomHeader(section, room) {
 }
 
 function exerciseCard() {
-  const { lesson } = state;
-  return `<section class="exercise-board" aria-labelledby="exercise-title">
-    <canvas class="sheet-art" aria-hidden="true" width="600" height="380"></canvas>
-    <div class="exercise-content">
-      <span class="board-course"><span aria-hidden="true"></span>${esc(lesson.course)} <b>/</b> Class exercise</span>
-      <h1 id="exercise-title">${esc(lesson.title)}</h1>
-      <div class="board-formula">${writtenFormula(lesson.formula)}</div>
-      <p>${esc(lesson.prompt.split("?")[0])}?</p>
-    </div></section>`;
-}
-
-// A stack of bent graph-paper sheets. The artwork is independent of the exercise data.
-function drawSheets() {
-  const canvas = document.querySelector(".sheet-art");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-  const at = (u, v) => [
-    46 + u * 354 + v * 135,
-    168 +
-      v * 111 -
-      u * 46 +
-      63 * Math.sin(u * 5.1 + v * 1.7) -
-      v * 40 * Math.cos(u * 3.4),
-  ];
-  ctx.clearRect(0, 0, 600, 380);
-  for (let i = 0; i <= 32; i++) {
-    ctx.beginPath();
-    for (let j = 0; j <= 70; j++) {
-      const [x, y] = at(j / 70, i / 32);
-      if (j) ctx.lineTo(x, y);
-      else ctx.moveTo(x, y);
-    }
-    ctx.lineWidth = i % 8 === 0 ? 2.4 : 1.1;
-    ctx.strokeStyle = i % 8 === 0 ? "#bec4ff" : "#969eff";
-    ctx.stroke();
-  }
-  for (let i = 0; i <= 26; i++) {
-    ctx.beginPath();
-    for (let j = 0; j <= 40; j++) {
-      const [x, y] = at(i / 26, j / 40);
-      if (j) ctx.lineTo(x, y);
-      else ctx.moveTo(x, y);
-    }
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "#8189ef";
-    ctx.stroke();
-  }
+  return `<section class="lesson-strip" aria-labelledby="exercise-title">
+    <div><p class="folio-kicker">${esc(state.lesson.course)} &nbsp; / &nbsp; EXERCISE SHEET</p>
+    <h1 id="exercise-title">${esc(state.lesson.title)}</h1><p>${esc(state.lesson.prompt.split("?")[0])}?</p></div>
+    <div class="lesson-formula">${writtenFormula(state.lesson.formula)}</div></section>`;
 }
 
 function picker(id, text, name, camera = false) {
@@ -430,8 +386,7 @@ function pilotView() {
       state.showcase && state.attempt && !state.challenge
         ? '<p class="waiting-note">Your tutor can open a follow-up here during class.</p>'
         : "";
-    const brief = `<section class="lesson-strip"><div><p class="folio-kicker">ANALISI I &nbsp; / &nbsp; EXERCISE SHEET</p><h1>${esc(state.lesson.title)}</h1><p>Where is the tangent horizontal?</p></div><div class="lesson-formula">${writtenFormula(state.lesson.formula)}</div></section>`;
-    const student = `<div class="student-layout">${brief}<div class="student-work">${follow}${response}${waiting}</div></div>`;
+    const student = `<div class="student-layout">${exerciseCard()}<div class="student-work">${follow}${response}${waiting}</div></div>`;
     app.innerHTML = state.showcase ? studentShowcase(student) : student;
     paintProbe(state.attempt);
     return;
@@ -450,7 +405,6 @@ function pilotView() {
         }
         ${state.fallbackCount ? `<p class="fallback-note">Live analysis was unavailable for ${state.fallbackCount} current submission(s). Check their working.</p>` : ""}
       </section>${state.showcase ? tutorForecast() : ""}</div><div>${joinPanel()}${state.simulated ? simulationTools() : ""}</div></div>`;
-  drawSheets();
 }
 
 function projectorView() {
@@ -460,7 +414,6 @@ function projectorView() {
     <img class="invite-qr" src="/qr.png" alt="Scan to join the exercise"><span class="qr-code">${state.showcase ? "Scan to join" : "Room " + esc(state.room)}</span>
     <p>${state.simulated ? `${state.count - state.examples} audience · ${state.examples} prepared` : `${state.count} steps received`}</p></aside></div>
     ${state.challenge ? `<section class="card lavender"><h2>${esc(state.challenge.title)}</h2><p>${esc(state.challenge.prompt)}</p></section><section class="card"><h2>Standings</h2>${board()}</section>` : ""}`;
-  drawSheets();
 }
 
 function render() {
