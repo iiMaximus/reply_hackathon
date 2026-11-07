@@ -77,7 +77,7 @@ With a server-side API key, photos and text get live analysis. In rehearsal, the
 
 ## Start a room
 
-Use Node 22.9 or later. From the repository root:
+Use Node 22.16 or later. From the repository root:
 
 ~~~sh
 npm ci

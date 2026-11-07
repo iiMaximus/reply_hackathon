@@ -1,7 +1,7 @@
 import http from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { networkInterfaces } from "node:os";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import QRCode from "qrcode";
 import { openClassroom } from "./quiz/open.mjs";
 import { createTeachingRoom } from "./quiz/room.mjs";
@@ -110,7 +110,25 @@ async function seedClass() {
 if (simulated) await seedClass();
 
 const web = new URL("./web/", import.meta.url);
+const mathDist = new URL("../node_modules/katex/dist/", import.meta.url);
 const files = {
+  "/math.js": [new URL("math.js", web), "text/javascript; charset=utf-8"],
+  "/math/katex.mjs": [
+    new URL("katex.mjs", mathDist),
+    "text/javascript; charset=utf-8",
+  ],
+  "/math/katex.css": [
+    new URL("katex.min.css", mathDist),
+    "text/css; charset=utf-8",
+  ],
+  ...Object.fromEntries(
+    (await readdir(new URL("fonts/", mathDist)))
+      .filter((name) => /\.(woff2?|ttf)$/.test(name))
+      .map((name) => [
+        "/math/fonts/" + name,
+        [new URL("fonts/" + name, mathDist), "font/" + name.split(".").pop()],
+      ]),
+  ),
   "/": [new URL("index.html", web), "text/html; charset=utf-8"],
   "/present": [new URL("index.html", web), "text/html; charset=utf-8"],
   "/board": [new URL("index.html", web), "text/html; charset=utf-8"],
@@ -462,7 +480,8 @@ async function handle(req, res) {
     if (openView && path.startsWith("/api/host/open/")) {
       const input = await body(req, 5700000);
       if (path === "/api/host/open/analyze") await classroom.analyze(input);
-      else if (path === "/api/host/open/publish") await classroom.publish(input);
+      else if (path === "/api/host/open/publish")
+        await classroom.publish(input);
       else if (path === "/api/host/open/close") await classroom.close(input.id);
       else fail(404, "Unknown action.");
       return json(res, openState("host"));

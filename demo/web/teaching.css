@@ -262,6 +262,30 @@ body.open-room {
   object-fit: contain;
   margin: 12px 0;
 }
+.math-inline,
+.math-block {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: normal;
+}
+.math-inline {
+  display: inline-block;
+  vertical-align: middle;
+  padding: 0.15em 0;
+  margin: -0.15em 0;
+}
+.math-block {
+  display: block;
+  padding: 0.25em 0;
+}
+.math-block .katex-display {
+  margin: 0.25em 0;
+}
+#open-preview:not(:empty) {
+  border-left: 2px solid var(--line);
+  margin: 12px 0;
+  padding-left: 14px;
+}
 .check {
   display: flex;
   align-items: center;

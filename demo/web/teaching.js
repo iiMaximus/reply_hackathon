@@ -1,13 +1,6 @@
-const h = (value) =>
-  String(value ?? "").replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
-      ],
-  );
+import { escapeHTML as h, mathText as math } from "/math.js";
 const btn = (action, label, primary = false, extra = "") =>
-  `<button type="button" data-action-open="${action}" class="${primary ? "primary" : ""}" ${extra}>${h(label)}</button>`;
+  `<button type="button" data-action-open="${action}" class="${primary ? "primary" : ""}" ${extra}>${math(label)}</button>`;
 const field = (id, label, value, rows = 3, max = 3000) =>
   `<label class="field" for="${id}">${h(label)}</label><textarea id="${id}" rows="${rows}" maxlength="${max}">${h(value)}</textarea>`;
 const picker = (id, label, accept) =>
@@ -15,7 +8,7 @@ const picker = (id, label, accept) =>
 const status = (label) =>
   `<div class="status-line"><span class="status-dot"></span>${h(label)}</div>`;
 const heading = (title, desc = "") =>
-  `<div class="heading"><h1>${h(title)}</h1>${desc ? `<p>${h(desc)}</p>` : ""}</div>`;
+  `<div class="heading"><h1>${math(title)}</h1>${desc ? `<p>${h(desc)}</p>` : ""}</div>`;
 let controls,
   root,
   role,
@@ -158,6 +151,12 @@ function uploadView() {
     ${field("open-source", "Text to use", source, 7, 5000)}<div class="actions">${btn("analyze", "Prepare this question", true, source.trim().length < 8 ? "disabled" : "")}</div></section>`
   );
 }
+function preview(value) {
+  const html = math(value);
+  return html === h(value)
+    ? ""
+    : '<small>Student preview</small><p class="question">' + html + "</p>";
+}
 function editor() {
   return (
     btn(
@@ -168,12 +167,12 @@ function editor() {
       "Review question",
       "Only the question and any image you select will be shared.",
     ) +
-    `<section class="panel editor">${field("open-prompt", "Question students will see", draft.prompt, 4)}
+    `<section class="panel editor">${field("open-prompt", "Question students will see", draft.prompt, 4)}<div id="open-preview">${preview(draft.prompt)}</div>
     ${asset?.image ? `<details data-preserve="attachment"><summary>Original image</summary><img class="question-image" src="${h(asset.image)}" alt="Uploaded page"></details><label class="check"><input type="checkbox" id="open-attach" ${attach ? "checked" : ""}> Also show this image to students</label>` : ""}
     <label class="field" for="open-topic">Topic</label><input id="open-topic" maxlength="100" placeholder="Optional" value="${h(draft.topic)}">
     ${field("open-ref", "Private reference answer", draft.reference, 3, 1000)}
     <p class="muted">Add a reference for content feedback. Without one, the agent looks for how students approached the question.</p>
-    ${draft.patterns.length > 1 ? `<details data-preserve="patterns"><summary>What the agent will look for</summary>${draft.patterns.map((p) => `<p>${h(p.anchor)}</p>`).join("")}</details>` : ""}
+    ${draft.patterns.length > 1 ? `<details data-preserve="patterns"><summary>What the agent will look for</summary>${draft.patterns.map((p) => `<p>${math(p.anchor)}</p>`).join("")}</details>` : ""}
     <div class="actions">${btn("publish", "Open for students", true)}<span class="muted">${h(draft.engine)}</span></div></section>`
   );
 }
@@ -191,7 +190,7 @@ function breakdown(s) {
         .sort((a, b) => b.count - a.count)
         .map(
           (g) =>
-            `<li><div><span>${h(g.label)}</span><strong>${g.count}</strong></div><progress aria-label="${h(g.label)}" max="${s.reviewed}" value="${g.count}"></progress></li>`,
+            `<li><div><span>${math(g.label)}</span><strong>${g.count}</strong></div><progress aria-label="${h(g.label)}" max="${s.reviewed}" value="${g.count}"></progress></li>`,
         )
         .join("")}</ul>`
     : '<p class="muted">Reasoning patterns appear as responses are reviewed.</p>';
@@ -206,7 +205,7 @@ function live(c) {
         ? "Finishing the class report"
         : "Open for responses",
     ) +
-    `<div class="columns"><section class="panel"><p class="question">${h(r.prompt)}</p>${imageOf(r)}${stats(s)}
+    `<div class="columns"><section class="panel"><p class="question">${math(r.prompt)}</p>${imageOf(r)}${stats(s)}
     <h2>Live reasoning patterns</h2>${breakdown(s)}<div class="actions">${btn("close", "Close and view report", true, r.status === "closing" ? "disabled" : "")}<span class="muted">${c.connected} student device${c.connected === 1 ? "" : "s"} connected</span></div></section>${invite()}</div>`
   );
 }
@@ -219,8 +218,8 @@ function report(r) {
         ? "Example data from a mechanics tutorial."
         : "Anonymous responses to the class question.",
     ) +
-    `<section class="panel"><p class="question">${h(r.prompt)}</p>${stats(r.summary)}<div class="report-grid"><section><h2>Reasoning patterns</h2>${breakdown(r.summary)}</section>
-    <section><h2>What to teach next</h2><p>${h(r.summary.move || "There are no responses to interpret.")}</p>${r.summary.engine ? `<small>${h(r.summary.engine)}</small>` : ""}</section></div></section><div class="actions">${btn("back", "Prepare another question", true)}</div>`
+    `<section class="panel"><p class="question">${math(r.prompt)}</p>${stats(r.summary)}<div class="report-grid"><section><h2>Reasoning patterns</h2>${breakdown(r.summary)}</section>
+    <section><h2>What to teach next</h2><p>${math(r.summary.move || "There are no responses to interpret.")}</p>${r.summary.engine ? `<small>${h(r.summary.engine)}</small>` : ""}</section></div></section><div class="actions">${btn("back", "Prepare another question", true)}</div>`
   );
 }
 function teacher(c) {
@@ -275,7 +274,7 @@ function student(c) {
       heading("My work", "Your responses are saved on this browser.") +
       `<section class="panel">${
         item
-          ? `${btn("progress", "All responses")}<p class="question">${h(item.prompt)}</p><h2>Your response</h2><p class="written">${h(item.text)}</p><h2>Feedback</h2><p>${h(item.hint)}</p>`
+          ? `${btn("progress", "All responses")}<p class="question">${math(item.prompt)}</p><h2>Your response</h2><p class="written">${math(item.text)}</p><h2>Feedback</h2><p>${math(item.hint)}</p>`
           : saved.length
             ? saved
                 .map((x) =>
@@ -298,9 +297,9 @@ function student(c) {
     status(
       r.status === "open" ? "Open for responses" : "Closed for responses",
     ) +
-    `<section class="panel"><p class="question">${h(r.prompt)}</p>${imageOf(r)}`;
+    `<section class="panel"><p class="question">${math(r.prompt)}</p>${imageOf(r)}`;
   if (v && (!editing || r.status !== "open")) {
-    html += `<h2>Your response</h2><p class="written">${h(v.text)}</p><div class="feedback"><h2>Private feedback</h2><p>${h(v.result?.hint || "The agent is reading your response.")}</p>
+    html += `<h2>Your response</h2><p class="written">${math(v.text)}</p><div class="feedback"><h2>Private feedback</h2><p>${math(v.result?.hint || "The agent is reading your response.")}</p>
     ${v.result ? `<small>${h(v.result.engine)}</small>` : "<progress></progress>"}</div>
     ${r.status === "open" && v.result ? btn("revise", "Revise response") : ""}`;
   } else if (r.status === "open") {
@@ -316,7 +315,7 @@ function board(c) {
   const r = c.active,
     open = r?.status === "open";
   return `<div class="board-layout"><section>${heading(open ? r.topic || "Class question" : "Join the class")}
-    ${open ? `<p class="question">${h(r.prompt)}</p>${imageOf(r)}<p>${r.total} response${r.total === 1 ? "" : "s"} received</p>` : `<p>${r ? "Responses are closed." : "Waiting for the professor to open a question."}</p>`}</section>${invite(true)}</div>`;
+    ${open ? `<p class="question">${math(r.prompt)}</p>${imageOf(r)}<p>${r.total} response${r.total === 1 ? "" : "s"} received</p>` : `<p>${r ? "Responses are closed." : "Waiting for the professor to open a question."}</p>`}</section>${invite(true)}</div>`;
 }
 export function paintTeaching(el, next, view, actions) {
   root = el;
@@ -502,7 +501,10 @@ document.addEventListener("input", (e) => {
     root.querySelector('[data-action-open="send"]').disabled = !answer.trim();
   }
   if (el.id === "open-topic") draft.topic = el.value;
-  if (el.id === "open-prompt") draft.prompt = el.value;
+  if (el.id === "open-prompt") {
+    draft.prompt = el.value;
+    root.querySelector("#open-preview").innerHTML = preview(el.value);
+  }
   if (el.id === "open-ref") draft.reference = el.value;
   if (el.id === "open-attach") attach = el.checked;
 });
