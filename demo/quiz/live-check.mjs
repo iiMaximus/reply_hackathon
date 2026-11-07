@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { cloudClient } from "./agent.mjs";
 import { openClassroom } from "./open.mjs";
@@ -48,7 +49,11 @@ assert.equal(receipt.result.group, 0);
 const mistaken = {};
 await room.answer(mistaken, {
   id,
-  text: "I add the two section averages and divide by two. The section sizes do not matter, so the overall mean is 80.",
+  photo:
+    "data:image/jpeg;base64," +
+    (
+      await readFile(new URL("./fixtures/section-means.jpg", import.meta.url))
+    ).toString("base64"),
 });
 const wrong = room.student(mistaken).receipt.result;
 assert.equal(wrong.engine, cloud.model);

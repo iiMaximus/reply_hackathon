@@ -52,6 +52,13 @@ let studentId = "",
   reportId = "",
   selectedReview = null;
 let saved = [];
+let aliasInput = "",
+  rememberedAlias = null,
+  restoringAlias = false;
+try {
+  rememberedAlias = localStorage.getItem("showwork-alias");
+} catch {}
+
 try {
   const data = JSON.parse(localStorage.getItem("showwork-progress") || "[]");
   if (Array.isArray(data)) saved = data.slice(0, 40);
@@ -266,11 +273,12 @@ function remember(r, v) {
     id: r.id,
     prompt: r.prompt,
     topic: r.topic,
-    text: v.text,
+    text: v.text || (v.photo ? "Photo of your working" : ""),
     hint: v.result.hint,
     practice: v.result.practice,
   };
-  if (saved.find((x) => x.id === r.id)?.text === row.text) return;
+  if (JSON.stringify(saved.find((x) => x.id === r.id)) === JSON.stringify(row))
+    return;
   saved = [row, ...saved.filter((x) => x.id !== r.id)].slice(0, 40);
   try {
     localStorage.setItem("showwork-progress", JSON.stringify(saved));
@@ -291,7 +299,50 @@ function student(c) {
     tab = "class";
   }
   remember(r, v);
-  const nav = `<nav aria-label="Student views">${btn("class", "Class question", false, `aria-current="${tab === "class" ? "page" : "false"}"`)}${btn("progress", "My work", false, `aria-current="${tab === "progress" ? "page" : "false"}"`)}</nav>`;
+  if (c.nickname == null) {
+    if (rememberedAlias !== null && !restoringAlias) {
+      restoringAlias = true;
+      queueMicrotask(async () => {
+        try {
+          await post("open/nickname", { alias: rememberedAlias });
+        } catch (err) {
+          rememberedAlias = null;
+          error = err.message;
+          try {
+            localStorage.removeItem("showwork-alias");
+          } catch {}
+        } finally {
+          restoringAlias = false;
+          controls.draw();
+        }
+      });
+    }
+    return (
+      heading("Join the class") +
+      `<section class="panel"><label for="open-alias">Choose a nickname</label><input id="open-alias" maxlength="24" autocomplete="off" value="${h(aliasInput)}"><p class="muted">Your nickname appears on the participation leaderboard. One point per question you try.</p><div class="actions">${btn("set-alias", "Join with nickname", true)}${btn("anonymous", "Stay anonymous")}</div></section>`
+    );
+  }
+  const nav = `<nav aria-label="Student views">${btn("class", "Class question", false, `aria-current="${tab === "class" ? "page" : "false"}"`)}${btn("progress", "My work", false, `aria-current="${tab === "progress" ? "page" : "false"}"`)}${btn("standings", "Leaderboard", false, `aria-current="${tab === "standings" ? "page" : "false"}"`)}</nav>`;
+  if (tab === "standings") {
+    let rank = 0;
+    return (
+      nav +
+      heading(
+        "Leaderboard",
+        "One point per question attempted. Ties share a place.",
+      ) +
+      `<section class="panel">${
+        c.standings.length
+          ? c.standings
+              .map((player, i, rows) => {
+                if (!i || rows[i - 1].points !== player.points) rank = i + 1;
+                return `<div class="standing"><span>${rank}. ${h(player.alias)}${player.alias === c.nickname ? " (you)" : ""}</span><strong>${player.points} pt</strong></div>`;
+              })
+              .join("")
+          : "<p>The first named participant to answer will appear here.</p>"
+      }</section>`
+    );
+  }
   if (tab === "progress") {
     const item = saved.find((x) => x.id === selectedReview);
     return (
@@ -324,13 +375,13 @@ function student(c) {
     ) +
     `<section class="panel"><p class="question">${math(r.prompt)}</p>${imageOf(r)}`;
   if (v && (!editing || r.status !== "open")) {
-    html += `<div class="sent-badge">${icon("circle-check")} Response submitted</div><h2>Your response</h2><p class="written">${math(v.text)}</p><div class="feedback"><h2>Private feedback</h2>${feedback(v.result)}
+    html += `<div class="sent-badge">${icon("circle-check")} Response submitted</div><h2>Your response</h2><p class="written">${math(v.text)}</p>${v.photo ? `<img class="question-image" src="${h(v.photo)}" alt="Your submitted working">` : ""}<div class="feedback"><h2>Private feedback</h2>${feedback(v.result)}
     ${v.result ? `<small>${h(v.result.engine)}</small>` : ""}</div>
     ${r.status === "open" && v.result ? btn("revise", "Revise response") : ""}`;
   } else if (r.status === "open") {
     html +=
       field("open-answer", "Your response", answer, 4, 2000) +
-      `<div class="actions">${btn("send", "Submit response", true, answer.trim() ? "" : "disabled")}${picker("open-student-photo", "Read text from a photo", "image/jpeg,image/png,image/webp")}</div><p class="muted">Your professor sees class patterns. Your feedback is private.</p>`;
+      `<div class="actions">${btn("send", "Submit response", true, answer.trim() ? "" : "disabled")}${c.photoEnabled ? picker("open-student-photo", "Submit a photo", "image/jpeg,image/png,image/webp") : ""}</div><p class="muted">Your professor sees class patterns. Your feedback is private.</p>`;
   } else
     html +=
       "<p>This question is closed. Stay here for the next class question.</p>";
@@ -445,6 +496,26 @@ async function act(b) {
   const a = b.dataset.actionOpen,
     c = state.classroom;
   error = "";
+  if (a === "standings") {
+    tab = "standings";
+    controls.draw();
+    return;
+  }
+  if (a === "set-alias" || a === "anonymous") {
+    const value = a === "anonymous" ? "" : aliasInput.trim();
+    if (!value && a === "set-alias") {
+      error = "Enter a nickname or choose Stay anonymous.";
+      controls.draw();
+      return;
+    }
+    return task("Joining class", async () => {
+      await post("open/nickname", { alias: value });
+      rememberedAlias = value;
+      try {
+        localStorage.setItem("showwork-alias", value);
+      } catch {}
+    });
+  }
   if (a === "analyze")
     return task("Preparing question", () => analyze({ text: source }));
   if (a === "sample") {
@@ -516,6 +587,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("input", (e) => {
   const el = e.target;
   if (!root?.contains(el)) return;
+  if (el.id === "open-alias") aliasInput = el.value;
   if (el.id === "open-source") {
     source = el.value;
     const b = root.querySelector('[data-action-open="analyze"]');
@@ -551,15 +623,14 @@ document.addEventListener("change", (e) => {
   }
   if (el.id === "open-student-photo" && el.files[0]) {
     const file = el.files[0];
-    void task("Reading photo", async () => {
+    const id = studentId;
+    void task("Checking your photo", async () => {
       const reader = await import("/uploads.js");
       const doc = await reader.openFile(file);
       try {
-        const page = await doc.page(1);
-        const txt = page.text || (await reader.recognize(page.image, progress));
-        if (!txt.trim())
-          throw Error("The photo was unclear. Type your step or try again.");
-        answer = (answer + "\n" + txt).trim().slice(0, 2000);
+        const { image } = await doc.page(1);
+        await post("open/answer", { id, text: answer, photo: image });
+        editing = false;
       } finally {
         await doc.dispose?.();
       }

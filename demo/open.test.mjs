@@ -123,3 +123,51 @@ test("an edited reference gets new patterns; conflicting evidence never counts a
     1,
   );
 });
+
+test("a photo goes to the vision model, stays private, and revisions earn one participation point", async () => {
+  const image = "data:image/jpeg;base64,/9j/AA==",
+    p = {},
+    other = {};
+  let visionCalls = 0;
+  const room = openClassroom({
+    cloud: {
+      enabled: true,
+      model: "vision test",
+      async ask(task, instructions, content) {
+        if (task !== "open_feedback") throw Error("Unexpected task");
+        assert.ok(
+          content.some(
+            (item) => item.type === "input_image" && item.image_url === image,
+          ),
+        );
+        visionCalls++;
+        return {
+          group: 0,
+          alignment: "consistent",
+          evidence: "cubic factors",
+          feedback: "Both cubic factors cancel.",
+          practice: "Change only the length.",
+        };
+      },
+    },
+  });
+  room.nickname(p, "Ada");
+  assert.throws(() => room.nickname(other, "ada"), /taken/);
+  room.nickname(other, "");
+  await room.analyze({ sample: 0 });
+  await room.publish(room.host().draft);
+  const id = room.board().id;
+  await room.answer(p, { id, photo: image });
+  const first = room.student(p).receipt;
+  assert.equal(first.result.practice, "Change only the length.");
+  const photoId = first.photo.split("/").pop();
+  assert.ok(room.workPhoto(p, photoId));
+  assert.equal(room.workPhoto(other, photoId), null);
+  await room.answer(p, { id, photo: image });
+  await room.answer(p, { id, photo: image, text: "Updated caption" });
+  assert.equal(visionCalls, 2);
+  assert.deepEqual(room.student(other).standings, [
+    { alias: "Ada", points: 1 },
+  ]);
+  assert.ok(!JSON.stringify(room.host()).includes(photoId));
+});

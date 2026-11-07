@@ -622,8 +622,24 @@ async function handle(req, res) {
   if (!p) fail(403, "Join the room first.");
   if (path === "/api/state" && req.method === "GET")
     return json(res, openView ? openState("student", p) : studentView(p));
+  if (req.method === "GET" && path.startsWith("/api/open/work/")) {
+    const photo = classroom.workPhoto(p, path.slice("/api/open/work/".length));
+    if (!photo) fail(404, "Photo unavailable.");
+    res.writeHead(200, {
+      "Content-Type": "image/jpeg",
+      "Cache-Control": "private, no-store",
+    });
+    return res.end(photo);
+  }
   if (req.method !== "POST") fail(405, "Unsupported action.");
-  const input = await body(req);
+  const input = await body(
+    req,
+    openView && path === "/api/open/answer" ? 4900000 : undefined,
+  );
+  if (openView && path === "/api/open/nickname") {
+    classroom.nickname(p, input.alias);
+    return json(res, openState("student", p));
+  }
   if (showcase && input.round !== undefined && input.round !== round)
     fail(409, "The tutor started a new round. Refresh and try again.");
   if (pilot && path !== "/api/attempt")

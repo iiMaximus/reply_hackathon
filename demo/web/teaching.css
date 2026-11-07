@@ -546,3 +546,5 @@ body.open-room {
 }
 .open-room button:has(.lucide-icon), .open-room .file-button { gap: .45em; }
 .open-room .feedback h3, .open-room .focus-topic { font-size: 1rem; margin: 1em 0 .25em; color: var(--action); }
+.standing { display: flex; justify-content: space-between; gap: 16px; padding: .65em 0; border-bottom: 1px solid var(--line); }
+#open-alias { display: block; margin: .5em 0; width: min(100%, 22em); }
