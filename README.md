@@ -1,10 +1,10 @@
-# Showwork
+# QAI
 
-Showwork helps a university tutor decide which step to explain next. During an Analisi I exercise, students can arrive at 42 by dropping a constant, by making an arithmetic error, or by guessing. Showwork reads their working, gives each student private feedback, and shows the professor which mistakes appeared across the room.
+QAI helps a university tutor decide which step to explain next. During an Analisi I exercise, students can arrive at 42 by dropping a constant, by making an arithmetic error, or by guessing. QAI reads their working, gives each student private feedback, and shows the professor which mistakes appeared across the room.
 
 **Reply Student Tech Clash 2026 · AI on Campus · Coding track**
 
-[Student room](https://solution-room-demo.onrender.com/join) · [Projector and QR](https://solution-room-demo.onrender.com/board) · [Finalist slides](submission/Showwork.pdf) · [Editable PowerPoint](submission/Showwork.pptx)
+[Student room](https://solution-room-demo.onrender.com/join) · [Projector and QR](https://solution-room-demo.onrender.com/board) · [Finalist slides](submission/QAI.pdf) · [Editable PowerPoint](submission/QAI.pptx)
 
 ## Submission materials
 

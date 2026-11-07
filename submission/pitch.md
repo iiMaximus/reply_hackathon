@@ -1,12 +1,12 @@
-# Showwork · Presenter notes
+# QAI · Presenter notes
 
 ## One minute, no slides
 
 In an Analisi I tutorial, the professor works through a limit on the board. A student gets 42. Did they drop a constant, make an arithmetic mistake, or just guess? The number alone can’t tell the professor what to explain.
 
-Showwork lets the professor open a question from their own worksheet. Students scan a QR code and send a line of reasoning or a photo of their working. Each gets private feedback. The professor sees which steps the class struggled with.
+QAI lets the professor open a question from their own worksheet. Students scan a QR code and send a line of reasoning or a photo of their working. Each gets private feedback. The professor sees which steps the class struggled with.
 
-We tried six simulated answers. Two students showed work that dropped the eight. A third sent only “42.” Showwork identified the missing eight in the first two and asked the third for a step.
+We tried six simulated answers. Two students showed work that dropped the eight. A third sent only “42.” QAI identified the missing eight in the first two and asked the third for a step.
 
 Our next test is one real tutorial. We want to see whether that report changes what the professor writes on the board.
 

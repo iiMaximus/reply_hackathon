@@ -1,4 +1,4 @@
-# Running and inspecting Showwork
+# Running and inspecting QAI
 
 ## Setup
 
