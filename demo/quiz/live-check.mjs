@@ -11,7 +11,7 @@ let calls = 0;
 const cloud = cloudClient({
   enabled: true,
   fetcher: async (url, options) => {
-    if (url !== "https://api.openai.com/v1/responses" || ++calls > 3)
+    if (url !== "https://api.openai.com/v1/responses" || ++calls > 4)
       throw Error("Unexpected live-check request");
     const res = await fetch(url, options);
     if (!res.ok) {
@@ -34,7 +34,7 @@ await room.analyze({
 const { draft } = room.host();
 assert.equal(draft.engine, cloud.model);
 assert.match(draft.reference, /\b75\b/);
-room.publish(draft);
+await room.publish(draft);
 const { id } = room.board();
 const participant = {};
 await room.answer(participant, {
@@ -44,9 +44,21 @@ await room.answer(participant, {
 const receipt = room.student(participant).receipt;
 assert.equal(receipt.result.engine, cloud.model);
 assert.ok(receipt.result.hint);
+assert.equal(receipt.result.group, 0);
+const mistaken = {};
+await room.answer(mistaken, {
+  id,
+  text: "I add the two section averages and divide by two. The section sizes do not matter, so the overall mean is 80.",
+});
+const wrong = room.student(mistaken).receipt.result;
+assert.equal(wrong.engine, cloud.model);
+assert.ok(
+  wrong.group > 0,
+  "Contradicting the reference must not count as the expected reasoning.",
+);
 await room.close(id);
 assert.equal(room.host().active.summary.engine, cloud.model);
-assert.equal(calls, 3);
+assert.equal(calls, 4);
 console.log(
   "Verified open question, private response feedback and anonymous class report using",
   cloud.model,

@@ -462,7 +462,7 @@ async function handle(req, res) {
     if (openView && path.startsWith("/api/host/open/")) {
       const input = await body(req, 5700000);
       if (path === "/api/host/open/analyze") await classroom.analyze(input);
-      else if (path === "/api/host/open/publish") classroom.publish(input);
+      else if (path === "/api/host/open/publish") await classroom.publish(input);
       else if (path === "/api/host/open/close") await classroom.close(input.id);
       else fail(404, "Unknown action.");
       return json(res, openState("host"));

@@ -240,7 +240,6 @@ function teacher(c) {
     }
     return editor();
   }
-  if (!screen && c.active?.status === "closed") return report(c.active);
   return home(c);
 }
 function remember(r, v) {
@@ -446,7 +445,8 @@ async function act(b) {
   if (a === "close")
     return task("Preparing the class report", async () => {
       await post("host/open/close", { id: c.active.id });
-      screen = "";
+      reportId = c.active.id;
+      screen = "report";
     });
   if (a === "send")
     return task("Checking your response", async () => {

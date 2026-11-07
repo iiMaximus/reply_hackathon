@@ -11,6 +11,7 @@ test("authored open prompt stays identical, pending feedback is counted, and clo
       if (task === "open_feedback") {
         await new Promise((resolve) => (release = resolve));
         return {
+          alignment: "consistent",
           group: 0,
           evidence: "cubic factors",
           feedback: "Check the height exponent.",
@@ -26,7 +27,7 @@ test("authored open prompt stays identical, pending feedback is counted, and clo
     q = {};
   await room.analyze({ sample: 0 });
   const { draft } = room.host();
-  room.publish(draft);
+  await room.publish(draft);
   const r = room.board();
   assert.equal(room.student(p).active.prompt, r.prompt);
   assert.equal(room.host().active.prompt, r.prompt);
@@ -58,7 +59,7 @@ test("without a key an unknown question accepts a written response, replaces a r
   await room.analyze({
     text: "How do you justify the result? Explain the main assumption.",
   });
-  room.publish(room.host().draft);
+  await room.publish(room.host().draft);
   const { id } = room.board();
   await room.answer(p, { id, text: "4" });
   assert.equal(
@@ -69,11 +70,56 @@ test("without a key an unknown question accepts a written response, replaces a r
   assert.equal(room.host().active.summary.total, 1);
   await room.close(id);
   await room.analyze({ sample: 1 });
-  room.publish(room.host().draft);
+  await room.publish(room.host().draft);
   assert.equal(room.host().history[0].id, id);
   assert.equal(room.student(p).receipt, null);
   await assert.rejects(
     () => room.answer(p, { id, text: "Stale response" }),
     /changed/,
+  );
+});
+
+test("an edited reference gets new patterns; conflicting evidence never counts as agreement", async () => {
+  const called = [];
+  const room = openClassroom({
+    cloud: {
+      enabled: true,
+      model: "test model",
+      async ask(task) {
+        called.push(task);
+        if (task === "open_rubric")
+          return {
+            misconception: "Both sections get equal weight",
+            move: "Compare a section of ten with a section of thirty.",
+          };
+        return {
+          alignment: "conflicts",
+          group: 0,
+          evidence: "divide by two",
+          feedback: "Consider the difference in section sizes.",
+        };
+      },
+    },
+  });
+  await room.analyze({ sample: 0 });
+  await room.publish({
+    ...room.host().draft,
+    prompt: "Explain how to combine the section averages.",
+    reference: "Weight each average by its section size.",
+  });
+  await room.answer(
+    {},
+    {
+      id: room.board().id,
+      text: "I divide by two regardless of section sizes.",
+    },
+  );
+  const groups = room.host().active.summary.groups;
+  assert.deepEqual(called, ["open_rubric", "open_feedback"]);
+  assert.ok(groups.some((g) => g.label === "Both sections get equal weight"));
+  assert.equal(groups[0].count, 0);
+  assert.equal(
+    groups.find((g) => g.label === "Uses a different reasoning step").count,
+    1,
   );
 });
